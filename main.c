@@ -18,20 +18,41 @@
 #include <stdlib.h>
 #include <getopt.h>
 #include <stdbool.h>
+#include "daemon.h"
+#include "options.h"
+#include "terminal.h"
 
 int main(int argc, char ** argv) {
+    crustOptionVerbose = false;
+    crustOptionDaemon = false;
+
     opterr = true;
     int option;
-    while((option = getopt(argc, argv, "h")) != -1)
+    while((option = getopt(argc, argv, "dhv")) != -1)
     {
         switch(option)
         {
+            case 'd':
+                crustOptionDaemon = true;
+                break;
+
             case 'h':
-                fprintf(stderr, "CRUST: Consolidated Realtime Updates on Status of Trains\r\n");
-                fprintf(stderr, "Usage: crust [options]\r\n");
-                fprintf(stderr, "  -h  Display this help.\r\n");
+                crust_terminal_print("CRUST: Consolidated Realtime Updates on Status of Trains");
+                crust_terminal_print("Usage: crust [options]");
+                crust_terminal_print("  -d  Run in daemon mode.");
+                crust_terminal_print("  -h  Display this help.");
+                exit(EXIT_SUCCESS);
+
+            case 'v':
+                crustOptionVerbose = true;
                 break;
         }
     }
+
+    if(crustOptionDaemon)
+    {
+        crust_daemon_run();
+    }
+
     return EXIT_SUCCESS;
 }
