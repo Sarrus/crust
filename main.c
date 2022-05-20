@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <getopt.h>
 #include <stdbool.h>
+#include <string.h>
 #include "daemon.h"
 #include "options.h"
 #include "terminal.h"
@@ -25,10 +26,11 @@
 int main(int argc, char ** argv) {
     crustOptionVerbose = false;
     crustOptionDaemon = false;
+    strcpy(crustOptionSocketPath, CRUST_DEFAULT_SOCKET_ADDRESS);
 
     opterr = true;
     int option;
-    while((option = getopt(argc, argv, "dhv")) != -1)
+    while((option = getopt(argc, argv, "dhs:v")) != -1)
     {
         switch(option)
         {
@@ -41,7 +43,14 @@ int main(int argc, char ** argv) {
                 crust_terminal_print("Usage: crust [options]");
                 crust_terminal_print("  -d  Run in daemon mode.");
                 crust_terminal_print("  -h  Display this help.");
+                crust_terminal_print("  -s  Define the address for the CRUST socket.");
+                crust_terminal_print("  -v  Display verbose output.");
                 exit(EXIT_SUCCESS);
+
+            case 's':
+                strncpy(crustOptionSocketPath, optarg, PATH_MAX);
+                crustOptionSocketPath[PATH_MAX - 1] = '\0';
+                break;
 
             case 'v':
                 crustOptionVerbose = true;
