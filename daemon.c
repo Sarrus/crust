@@ -4,10 +4,41 @@
 #include <errno.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <signal.h>
+#include <stdio.h>
 #include "daemon.h"
 #include "terminal.h"
 #include "state.h"
 #include "options.h"
+
+static int socketFp;
+
+_Noreturn void crust_daemon_stop()
+{
+    crust_terminal_print_verbose("Closing the CRUST socket...");
+    close(socketFp);
+
+    crust_terminal_print_verbose("Removing the CRUST socket from the VFS...");
+    unlink(crustOptionSocketPath);
+
+    exit(EXIT_SUCCESS);
+}
+
+void crust_handle_signal(int signal)
+{
+    switch(signal)
+    {
+        case SIGINT:
+            crust_terminal_print_verbose("Received SIGINT, shutting down...");
+            crust_daemon_stop();
+        case SIGTERM:
+            crust_terminal_print_verbose("Received SIGTERM, shutting down...");
+            crust_daemon_stop();
+        default:
+            crust_terminal_print("Received an unexpected signal, exiting.");
+            exit(EXIT_FAILURE);
+    }
+}
 
 // Starts the CRUST daemon, exiting when the daemon finishes.
 _Noreturn void crust_daemon_run()
@@ -28,7 +59,7 @@ _Noreturn void crust_daemon_run()
     crust_terminal_print_verbose("Creating CRUST socket...");
 
     // Request a socket from the kernel
-    int socketFp = socket(PF_LOCAL, SOCK_STREAM, 0);
+    socketFp = socket(PF_LOCAL, SOCK_STREAM, 0);
     if(socketFp == -1)
     {
         crust_terminal_print("Failed to create CRUST socket.");
@@ -79,5 +110,12 @@ _Noreturn void crust_daemon_run()
     // Pop the previous umask
     umask(lastUmask);
 
-    exit(EXIT_SUCCESS);
+    // Register the signal handlers
+    signal(SIGINT, crust_handle_signal);
+    signal(SIGTERM, crust_handle_signal);
+
+    for(;;)
+    {
+        sleep(1);
+    }
 }
