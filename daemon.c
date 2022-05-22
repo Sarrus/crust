@@ -5,6 +5,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <signal.h>
+#include <poll.h>
 #include <stdio.h>
 #include "daemon.h"
 #include "terminal.h"
@@ -37,6 +38,29 @@ void crust_handle_signal(int signal)
         default:
             crust_terminal_print("Received an unexpected signal, exiting.");
             exit(EXIT_FAILURE);
+    }
+}
+
+//TODO: Make this dynamic
+#define FP_STACK_SIZE 4096
+_Noreturn void crust_daemon_loop()
+{
+    struct pollfd pollList[FP_STACK_SIZE];
+    pollList[0].fd = socketFp;
+    pollList[0].events = POLLRDBAND | POLLRDNORM;
+    for(;;)
+    {
+        if(poll(&pollList[0], 1, -1) == -1)
+        {
+            crust_terminal_print("Error occurred while polling connections.");
+            printf("%i", errno);
+            exit(EXIT_FAILURE);
+        }
+        crust_terminal_print_verbose("Polled");
+        if(accept(socketFp, NULL, 0) == -1)
+        {
+            crust_terminal_print("Failed to accept a socket connection.");
+        }
     }
 }
 
@@ -114,8 +138,12 @@ _Noreturn void crust_daemon_run()
     signal(SIGINT, crust_handle_signal);
     signal(SIGTERM, crust_handle_signal);
 
-    for(;;)
+    // Start accepting connections
+    if(listen(socketFp, CRUST_SOCKET_QUEUE_LIMIT))
     {
-        sleep(1);
+        crust_terminal_print("Failed to enable listening on the CRUST socket.");
+        exit(EXIT_FAILURE);
     }
+
+    crust_daemon_loop();
 }
