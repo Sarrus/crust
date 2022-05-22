@@ -41,24 +41,76 @@ void crust_handle_signal(int signal)
     }
 }
 
-//TODO: Make this dynamic
-#define FP_STACK_SIZE 4096
+void crust_poll_list_regen(struct pollfd ** list, int * listLength, int * listPointer)
+{
+    crust_terminal_print_verbose("Regenerating poll list...");
+
+    int newListLength = 100;
+
+    for(int i = 0; i < *listPointer; i++)
+    {
+        if((*list)[i].fd > 0)
+        {
+            newListLength++;
+        }
+    }
+
+    struct pollfd * newList = malloc(sizeof(struct pollfd) * newListLength);
+
+    memset(newList, '\0', sizeof(struct pollfd) * newListLength);
+
+    newList[0].fd = socketFp;
+    newList[0].events = POLLRDBAND | POLLRDNORM;
+
+    int newListPointer = 1;
+
+    for(int i = 1; i < *listPointer; i++)
+    {
+        if((*list)[i].fd > 0)
+        {
+            newList[newListPointer].fd = (*list)[i].fd;
+            newList[newListPointer].events = (*list)[i].events;
+            newListPointer++;
+        }
+    }
+
+    if(*list)
+    {
+        free(*list);
+    }
+    *list = newList;
+    *listLength = newListLength;
+    *listPointer = newListPointer;
+}
+
 _Noreturn void crust_daemon_loop()
 {
-    struct pollfd pollList[FP_STACK_SIZE];
-    pollList[0].fd = socketFp;
-    pollList[0].events = POLLRDBAND | POLLRDNORM;
+    struct pollfd * pollList = NULL;
+    int pollListLength = 0;
+    int pollListPointer = 0;
+
+    crust_poll_list_regen(&pollList, &pollListLength, &pollListPointer);
+
     for(;;)
     {
-        if(poll(&pollList[0], 1, -1) == -1)
+        int pollResult = poll(&pollList[0], pollListPointer, 60000);
+        if(pollResult == -1)
         {
             crust_terminal_print("Error occurred while polling connections.");
             exit(EXIT_FAILURE);
         }
-        crust_terminal_print_verbose("Polled");
-        if(accept(socketFp, NULL, 0) == -1)
+        if(!pollResult)
         {
-            crust_terminal_print("Failed to accept a socket connection.");
+            crust_poll_list_regen(&pollList, &pollListLength, &pollListPointer);
+        }
+
+        if(pollList[0].revents & (POLLRDBAND | POLLRDNORM))
+        {
+            if(accept(socketFp, NULL, 0) == -1)
+            {
+                crust_terminal_print("Failed to accept a socket connection.");
+            }
+            crust_terminal_print_verbose("New connection accepted.");
         }
     }
 }
