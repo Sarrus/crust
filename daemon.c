@@ -53,7 +53,6 @@ _Noreturn void crust_daemon_loop()
         if(poll(&pollList[0], 1, -1) == -1)
         {
             crust_terminal_print("Error occurred while polling connections.");
-            printf("%i", errno);
             exit(EXIT_FAILURE);
         }
         crust_terminal_print_verbose("Polled");
@@ -130,6 +129,9 @@ _Noreturn void crust_daemon_run()
         crust_terminal_print("Failed to bind CRUST socket to the VFS.");
         exit(EXIT_FAILURE);
     }
+
+    // Free the memory used for the address
+    free(socketAddress);
 
     // Pop the previous umask
     umask(lastUmask);
