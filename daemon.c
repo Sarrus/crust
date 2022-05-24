@@ -7,6 +7,7 @@
 #include <signal.h>
 #include <poll.h>
 #include <stdio.h>
+#include <fcntl.h>
 #include "daemon.h"
 #include "terminal.h"
 #include "state.h"
@@ -93,24 +94,59 @@ _Noreturn void crust_daemon_loop()
 
     for(;;)
     {
-        int pollResult = poll(&pollList[0], pollListPointer, 60000);
+        int pollResult = poll(&pollList[0], pollListPointer, -1);
         if(pollResult == -1)
         {
             crust_terminal_print("Error occurred while polling connections.");
             exit(EXIT_FAILURE);
         }
-        if(!pollResult)
-        {
-            crust_poll_list_regen(&pollList, &pollListLength, &pollListPointer);
-        }
 
+        // pollList[0] always contains the CRUST socket. This will show up as readable when a new connection is available
         if(pollList[0].revents & (POLLRDBAND | POLLRDNORM))
         {
-            if(accept(socketFp, NULL, 0) == -1)
+            int newSocketFp = accept(socketFp, NULL, 0);
+            if(newSocketFp == -1)
             {
                 crust_terminal_print("Failed to accept a socket connection.");
+                exit(EXIT_FAILURE);
             }
+
+            if(fcntl(newSocketFp, F_SETFL, fcntl(newSocketFp, F_GETFL) | O_NONBLOCK) == -1)
+            {
+                crust_terminal_print("Unable to make the new socket non-blocking.");
+                exit(EXIT_FAILURE);
+            }
+
+            // The poll list needs to be regenerated if we run out of space.
+            if(pollListLength <= pollListPointer)
+            {
+                crust_poll_list_regen(&pollList, &pollListLength, &pollListPointer);
+            }
+
+            // Add the new connection to the poll list and request an alert if it becomes writable. (We will also be
+            // informed if the other end hangs up.)
+            pollList[pollListPointer].fd = newSocketFp;
+            pollList[pollListPointer].events = POLLRDBAND | POLLRDNORM;
+            pollListPointer++;
             crust_terminal_print_verbose("New connection accepted.");
+        }
+
+        for(int i = 1; i < pollListPointer; i++)
+        {
+            if(pollList[i].revents & POLLHUP)
+            {
+                crust_terminal_print_verbose("Connection terminated.");
+                pollList[i].fd = -(pollList[i].fd);
+            }
+            else if(pollList[i].revents & (POLLRDBAND | POLLRDNORM))
+            {
+                char readBuffer[16];
+                size_t readBytes;
+                while((readBytes = read(pollList[i].fd, &readBuffer, 16)) != -1)
+                {
+                    write(STDOUT_FILENO, &readBuffer, readBytes);
+                }
+            }
         }
     }
 }
@@ -191,6 +227,13 @@ _Noreturn void crust_daemon_run()
     // Register the signal handlers
     signal(SIGINT, crust_handle_signal);
     signal(SIGTERM, crust_handle_signal);
+
+    // Make the socket non-blocking
+    if(fcntl(socketFp, F_SETFD, fcntl(socketFp, F_GETFD) | O_NONBLOCK) == -1)
+    {
+        crust_terminal_print("Unable to make the CRUST socket non-blocking.");
+        exit(EXIT_FAILURE);
+    }
 
     // Start accepting connections
     if(listen(socketFp, CRUST_SOCKET_QUEUE_LIMIT))
