@@ -4,6 +4,13 @@
 
 #define CRUST_BLOCK_INDEX_SIZE_INCREMENT 100
 
+const CRUST_LINK_TYPE crustLinkInversions[] = {
+        [upMain] = downMain,
+        [upBranching] = downBranching,
+        [downMain] = upMain,
+        [downBranching] = upBranching
+};
+
 void crust_block_index_add(CRUST_BLOCK * block, CRUST_STATE * state)
 {
     if(state->blockIndexPointer >= state->blockIndexLength)
@@ -26,12 +33,44 @@ void crust_block_init(CRUST_BLOCK ** block, CRUST_STATE * state)
 {
     *block = malloc(sizeof(CRUST_BLOCK));
 
-    (*block)->upMain = NULL;
-    (*block)->upBranching = NULL;
-    (*block)->downMain = NULL;
-    (*block)->downBranching = NULL;
+    for(int i = 0; i < CRUST_MAX_LINKS; i++)
+    {
+        (*block)->links[i] = NULL;
+    }
 
     crust_block_index_add(*block, state);
+}
+
+/* Takes a CRUST block with one or more links set (up and down main and branching)
+ * and attempts to insert them into the CRUST layout. Returns 0 on success or:
+ * 1: The block could not be inserted because it contains no links
+ * 2: The block could not be inserted because a link already exists to its target */
+int crust_block_insert(CRUST_BLOCK * block, CRUST_STATE * state)
+{
+    unsigned int linkCount = 0;
+    for(int i = 0; i < CRUST_MAX_LINKS; i++)
+    {
+        if(block->links[i] != NULL)
+        {
+            linkCount++;
+            if(block->links[i]->links[crustLinkInversions[i]] != NULL)
+            {
+                return 2;
+            }
+        }
+    }
+
+    if(!linkCount)
+    {
+        return 1;
+    }
+
+    for(int i = 0; i < CRUST_MAX_LINKS; i++)
+    {
+        block->links[i]->links[crustLinkInversions[i]] = block;
+    }
+
+    return 0;
 }
 
 void crust_state_init(CRUST_STATE ** state)

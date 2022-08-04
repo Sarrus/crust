@@ -3,15 +3,20 @@
 
 #define CRUST_BLOCK struct crustBlock
 #define CRUST_STATE struct crustState
+#define CRUST_LINK_TYPE enum crustLinkType
+#define CRUST_MAX_LINKS 4
+
+enum crustLinkType {
+    upMain,
+    upBranching,
+    downMain,
+    downBranching
+};
 
 struct crustBlock {
     unsigned int blockId;
-    CRUST_BLOCK * upMain;
-    CRUST_BLOCK * upBranching;
-    CRUST_BLOCK * downMain;
-    CRUST_BLOCK * downBranching;
+    CRUST_BLOCK * links[CRUST_MAX_LINKS];
 };
-
 
 struct crustState {
     CRUST_BLOCK * initialBlock;
