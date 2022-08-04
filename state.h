@@ -15,6 +15,9 @@ struct crustBlock {
 
 struct crustState {
     CRUST_BLOCK * initialBlock;
+    CRUST_BLOCK ** blockIndex;
+    unsigned int blockIndexLength;
+    unsigned int blockIndexPointer;
 };
 
 void crust_state_init(CRUST_STATE ** state);
