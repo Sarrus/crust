@@ -12,6 +12,7 @@
 #include "terminal.h"
 #include "state.h"
 #include "options.h"
+#include "messaging.h"
 
 static int socketFp;
 
@@ -42,7 +43,7 @@ void crust_handle_signal(int signal)
     }
 }
 
-void crust_poll_list_regen(struct pollfd ** list, int * listLength, int * listPointer)
+void crust_poll_list_and_buffer_regen(struct pollfd ** list, int * listLength, int * listPointer, CRUST_INPUT_BUFFER ** buffer)
 {
     crust_terminal_print_verbose("Regenerating poll list...");
 
@@ -57,8 +58,10 @@ void crust_poll_list_regen(struct pollfd ** list, int * listLength, int * listPo
     }
 
     struct pollfd * newList = malloc(sizeof(struct pollfd) * newListLength);
+    CRUST_INPUT_BUFFER * newBuffer = malloc(sizeof(CRUST_INPUT_BUFFER) * newListLength);
 
     memset(newList, '\0', sizeof(struct pollfd) * newListLength);
+    memset(newBuffer, '\0', sizeof(CRUST_INPUT_BUFFER) * newListLength);
 
     newList[0].fd = socketFp;
     newList[0].events = POLLRDBAND | POLLRDNORM;
@@ -71,6 +74,11 @@ void crust_poll_list_regen(struct pollfd ** list, int * listLength, int * listPo
         {
             newList[newListPointer].fd = (*list)[i].fd;
             newList[newListPointer].events = (*list)[i].events;
+            newBuffer[newListPointer].writePointer = (*buffer)[i].writePointer;
+            for(int j = 0; j < CRUST_MAX_MESSAGE_LENGTH; j++)
+            {
+                newBuffer[newListPointer].buffer[j] = (*buffer)[i].buffer[j];
+            }
             newListPointer++;
         }
     }
@@ -79,9 +87,14 @@ void crust_poll_list_regen(struct pollfd ** list, int * listLength, int * listPo
     {
         free(*list);
     }
+    if(*buffer)
+    {
+        free(*buffer);
+    }
     *list = newList;
     *listLength = newListLength;
     *listPointer = newListPointer;
+    *buffer = newBuffer;
 }
 
 _Noreturn void crust_daemon_loop()
@@ -89,16 +102,71 @@ _Noreturn void crust_daemon_loop()
     struct pollfd * pollList = NULL;
     int pollListLength = 0;
     int pollListPointer = 0;
+    CRUST_INPUT_BUFFER * bufferList = NULL;
 
-    crust_poll_list_regen(&pollList, &pollListLength, &pollListPointer);
+    crust_poll_list_and_buffer_regen(&pollList, &pollListLength, &pollListPointer, &bufferList);
 
     for(;;)
     {
+        // Poll. This will block until a socket becomes readable and / or a new connection is made.
         int pollResult = poll(&pollList[0], pollListPointer, -1);
+
         if(pollResult == -1)
         {
             crust_terminal_print("Error occurred while polling connections.");
             exit(EXIT_FAILURE);
+        }
+
+        // Go through all the connections (except the socket itself)
+        for(int i = 1; i < pollListPointer; i++)
+        {
+            // deactivate the connection in the poll list if it hangs up
+            if(pollList[i].revents & POLLHUP)
+            {
+                crust_terminal_print_verbose("Connection terminated.");
+                pollList[i].fd = -(pollList[i].fd);
+            }
+            else if(pollList[i].revents & (POLLRDBAND | POLLRDNORM))
+            {
+                unsigned int bufferSpaceRemaining = CRUST_MAX_MESSAGE_LENGTH - bufferList[i].writePointer;
+                if(bufferSpaceRemaining)
+                {
+                    size_t readBytes = read(pollList[i].fd, &bufferList[i].buffer[bufferList[i].writePointer], bufferSpaceRemaining);
+                    bufferList[i].writePointer += readBytes;
+                    if(bufferList[i].writePointer > 0
+                        && (bufferList[i].buffer[bufferList[i].writePointer - 1] == '\r'
+                            || bufferList[i].buffer[bufferList[i].writePointer - 1] == '\n'))
+                    {
+                        CRUST_MIXED_OPERATION_INPUT operationInput;
+                        CRUST_OPCODE opcode = crust_interpret_message(bufferList[i].buffer,
+                                                                      bufferList[i].writePointer,
+                                                                      &operationInput);
+                        switch(opcode)
+                        {
+                            case INSERT_BLOCK:
+                                crust_terminal_print_verbose("OPCODE: Insert Block");
+                                break;
+
+                            case RESEND_STATE:
+                                crust_terminal_print_verbose("OPCODE: Resend State");
+                                break;
+
+                            case NO_OPERATION:
+                                crust_terminal_print_verbose("OPCODE: No Operation");
+                                break;
+
+                            default:
+                                crust_terminal_print_verbose("Unrecognised OPCODE");
+                                break;
+                        }
+                        bufferList[i].writePointer = 0;
+                    }
+                }
+                else
+                {
+                    //TODO: Deal with a full buffer
+                }
+            }
         }
 
         // pollList[0] always contains the CRUST socket. This will show up as readable when a new connection is available
@@ -120,7 +188,7 @@ _Noreturn void crust_daemon_loop()
             // The poll list needs to be regenerated if we run out of space.
             if(pollListLength <= pollListPointer)
             {
-                crust_poll_list_regen(&pollList, &pollListLength, &pollListPointer);
+                crust_poll_list_and_buffer_regen(&pollList, &pollListLength, &pollListPointer, &bufferList);
             }
 
             // Add the new connection to the poll list and request an alert if it becomes writable. (We will also be
@@ -129,24 +197,6 @@ _Noreturn void crust_daemon_loop()
             pollList[pollListPointer].events = POLLRDBAND | POLLRDNORM;
             pollListPointer++;
             crust_terminal_print_verbose("New connection accepted.");
-        }
-
-        for(int i = 1; i < pollListPointer; i++)
-        {
-            if(pollList[i].revents & POLLHUP)
-            {
-                crust_terminal_print_verbose("Connection terminated.");
-                pollList[i].fd = -(pollList[i].fd);
-            }
-            else if(pollList[i].revents & (POLLRDBAND | POLLRDNORM))
-            {
-                char readBuffer[16];
-                size_t readBytes;
-                while((readBytes = read(pollList[i].fd, &readBuffer, 16)) != -1)
-                {
-                    write(STDOUT_FILENO, &readBuffer, readBytes);
-                }
-            }
         }
     }
 }
