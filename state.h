@@ -1,6 +1,8 @@
 #ifndef CRUST_STATE_H
 #define CRUST_STATE_H
 
+#include <stdbool.h>
+
 #define CRUST_BLOCK struct crustBlock
 #define CRUST_STATE struct crustState
 #define CRUST_LINK_TYPE enum crustLinkType
@@ -26,5 +28,6 @@ struct crustState {
 };
 
 void crust_state_init(CRUST_STATE ** state);
+bool crust_block_get(unsigned int blockId, CRUST_BLOCK ** block, CRUST_STATE * state);
 
 #endif //CRUST_STATE_H

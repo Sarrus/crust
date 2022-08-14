@@ -14,7 +14,15 @@
 #include "options.h"
 #include "messaging.h"
 
+#define CRUST_WRITE struct crustWrite
+
 static int socketFp;
+
+struct crustWrite {
+    char * writeBuffer;
+    unsigned long bufferLength;
+    unsigned int targets;
+};
 
 _Noreturn void crust_daemon_stop()
 {
@@ -97,7 +105,7 @@ void crust_poll_list_and_buffer_regen(struct pollfd ** list, int * listLength, i
     *buffer = newBuffer;
 }
 
-_Noreturn void crust_daemon_loop()
+_Noreturn void crust_daemon_loop(CRUST_STATE * state)
 {
     struct pollfd * pollList = NULL;
     int pollListLength = 0;
@@ -149,6 +157,12 @@ _Noreturn void crust_daemon_loop()
 
                             case RESEND_STATE:
                                 crust_terminal_print_verbose("OPCODE: Resend State");
+                                char * testPrintState;
+                                unsigned long testPrintBytes = crust_print_state(state, &testPrintState);
+                                for(int j = 0; j < testPrintBytes; j++)
+                                {
+                                    fputc(testPrintState[j], stdout);
+                                }
                                 break;
 
                             case NO_OPERATION:
@@ -299,5 +313,5 @@ _Noreturn void crust_daemon_run()
         exit(EXIT_FAILURE);
     }
 
-    crust_daemon_loop();
+    crust_daemon_loop(state);
 }

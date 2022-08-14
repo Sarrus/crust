@@ -76,8 +76,21 @@ int crust_block_insert(CRUST_BLOCK * block, CRUST_STATE * state)
 void crust_state_init(CRUST_STATE ** state)
 {
     *state = malloc(sizeof(CRUST_STATE));
-    crust_block_init(&(*state)->initialBlock, *state);
     (*state)->blockIndex = NULL;
     (*state)->blockIndexLength = 0;
     (*state)->blockIndexPointer = 0;
+    crust_block_init(&(*state)->initialBlock, *state);
+}
+
+bool crust_block_get(unsigned int blockId, CRUST_BLOCK ** block, CRUST_STATE * state)
+{
+    if(blockId < state->blockIndexPointer)
+    {
+        *block = state->blockIndex[blockId];
+        return true;
+    }
+    else
+    {
+        return false;
+    }
 }

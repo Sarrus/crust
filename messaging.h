@@ -30,5 +30,6 @@ union crustMixedOperationInput
 };
 
 CRUST_OPCODE crust_interpret_message(const char * message, unsigned int length, CRUST_MIXED_OPERATION_INPUT * operationInput);
+unsigned long crust_print_state(CRUST_STATE * state, char ** dynamicPrintBuffer);
 
 #endif //CRUST_MESSAGING_H
