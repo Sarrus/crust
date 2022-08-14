@@ -231,7 +231,12 @@ _Noreturn void crust_daemon_run()
     struct sockaddr * socketAddress;
 
     // Measure the socket address length
-    unsigned long addrLength = sizeof(socketAddress->sa_len) + sizeof(socketAddress->sa_family) + strlen(crustOptionSocketPath);
+    unsigned long addrLength =
+#ifdef MACOS
+            sizeof(socketAddress->sa_len) +
+#endif
+            sizeof(socketAddress->sa_family) +
+            strlen(crustOptionSocketPath);
 
     // Allocate the memory
     socketAddress = malloc(addrLength);
@@ -240,7 +245,9 @@ _Noreturn void crust_daemon_run()
     memset(socketAddress, '\0', addrLength);
 
     // Fill the structure
+#ifdef MACOS
     socketAddress->sa_len = addrLength;
+#endif
     socketAddress->sa_family = AF_LOCAL;
     strcpy(socketAddress->sa_data, crustOptionSocketPath);
 
