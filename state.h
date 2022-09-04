@@ -15,8 +15,13 @@ enum crustLinkType {
     downBranching
 };
 
+/*
+ * It is important that the crust block ID is a predictable length to prevent buffer overruns when printing the details
+ * of blocks. It should always be a 32 bit unsigned int so that when it is converted to decimal, it has a maximum of
+ * 10 digits
+ */
 struct crustBlock {
-    unsigned int blockId;
+    u_int32_t blockId;
     CRUST_BLOCK * links[CRUST_MAX_LINKS];
 };
 

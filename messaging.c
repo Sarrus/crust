@@ -11,6 +11,19 @@
 #define CRUST_PRINT_BUFFER_SIZE_INCREMENT 65536
 
 /*
+ * Note: when adding print functions, take care to avoid buffer overruns by calculating the maximum possible length of the
+ * message you are printing. Make sure you know the maximum possible length of each variable you are including in the
+ * message.
+ */
+
+const char * crustLinkDesignations[] = {
+        [upMain] = "UM",
+        [upBranching] = "UB",
+        [downMain] = "DM",
+        [downBranching] = "DB"
+};
+
+/*
  * Takes a pointer to a CRUST message and the length of the message and returns the detected opcode. If there is an input
  * to go with the operation, fills operationInput. See CRUST_MIXED_OPERATION_INPUT for details. If the opcode is not
  * recognised or there is an error, returns NO_OPERATION.
@@ -48,31 +61,23 @@ CRUST_OPCODE crust_interpret_message(const char * message, unsigned int length, 
             return NO_OPERATION;
     }
 }
-
-size_t crust_print_block(CRUST_BLOCK * block, char * printBuffer) // printBuffer must point to CRUST_MAX_MESSAGE_LENGTH bytes
+/*
+ * Fills a buffer CRUST_MAX_MESSAGE_LENGTH bytes long with the properties of the specified block.
+ * The buffer must already be allocated.
+ */
+size_t crust_print_block(CRUST_BLOCK * block, char * printBuffer) // printBuffer must point to
 {
     char partBuffer[CRUST_MAX_MESSAGE_LENGTH];
     sprintf(printBuffer,"BL%i;", block->blockId);
-    if(block->links[upMain] != NULL)
+    for(int i = 0; i < CRUST_MAX_LINKS; i++)
     {
-        sprintf(partBuffer, "UM%i;", block->links[upMain]->blockId);
-        strcat(printBuffer, partBuffer);
+        if(block->links[i] != NULL)
+        {
+            sprintf(partBuffer, "%s%i;", crustLinkDesignations[i], block->links[upMain]->blockId);
+            strcat(printBuffer, partBuffer);
+        }
     }
-    if(block->links[upBranching] != NULL)
-    {
-        sprintf(partBuffer, "UB%i;", block->links[upBranching]->blockId);
-        strcat(printBuffer, partBuffer);
-    }
-    if(block->links[downMain] != NULL)
-    {
-        sprintf(partBuffer, "DM%i;", block->links[downMain]->blockId);
-        strcat(printBuffer, partBuffer);
-    }
-    if(block->links[downBranching] != NULL)
-    {
-        sprintf(partBuffer, "DB%i;", block->links[downBranching]->blockId);
-        strcat(printBuffer, partBuffer);
-    }
+    // Current max length 58 bytes
     strcat(printBuffer, "\r\n");
     return strlen(printBuffer);
 }
@@ -92,7 +97,7 @@ unsigned long crust_print_state(CRUST_STATE * state, char ** dynamicPrintBuffer)
         {
             printBufferSize += CRUST_PRINT_BUFFER_SIZE_INCREMENT;
             *dynamicPrintBuffer = realloc(*dynamicPrintBuffer, printBufferSize);
-            if(dynamicPrintBuffer == NULL)
+            if(*dynamicPrintBuffer == NULL)
             {
                 crust_terminal_print("Memory allocation failure when resizing print buffer");
                 exit(EXIT_FAILURE);
