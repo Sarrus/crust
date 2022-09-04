@@ -11,6 +11,10 @@ const CRUST_LINK_TYPE crustLinkInversions[] = {
         [downBranching] = upBranching
 };
 
+/*
+ * Adds a block to the block index, enabling CRUST to locate it by its block ID which is allocated at the same time.
+ * All blocks that form part of the live layout must be in the index.
+ */
 void crust_block_index_add(CRUST_BLOCK * block, CRUST_STATE * state)
 {
     if(state->blockIndexPointer >= state->blockIndexLength)
@@ -29,6 +33,9 @@ void crust_block_index_add(CRUST_BLOCK * block, CRUST_STATE * state)
     state->blockIndexPointer++;
 }
 
+/*
+ * Allocates the memory for a new block and initialises it.
+ */
 void crust_block_init(CRUST_BLOCK ** block, CRUST_STATE * state)
 {
     *block = malloc(sizeof(CRUST_BLOCK));
@@ -41,10 +48,12 @@ void crust_block_init(CRUST_BLOCK ** block, CRUST_STATE * state)
     crust_block_index_add(*block, state);
 }
 
-/* Takes a CRUST block with one or more links set (up and down main and branching)
+/*
+ * Takes a CRUST block with one or more links set (up and down main and branching)
  * and attempts to insert them into the CRUST layout. Returns 0 on success or:
  * 1: The block could not be inserted because it contains no links
- * 2: The block could not be inserted because a link already exists to its target */
+ * 2: The block could not be inserted because a link already exists to its target
+ * */
 int crust_block_insert(CRUST_BLOCK * block, CRUST_STATE * state)
 {
     unsigned int linkCount = 0;
@@ -73,6 +82,9 @@ int crust_block_insert(CRUST_BLOCK * block, CRUST_STATE * state)
     return 0;
 }
 
+/*
+ * Initialises a new crust state and creates block 0.
+ */
 void crust_state_init(CRUST_STATE ** state)
 {
     *state = malloc(sizeof(CRUST_STATE));
@@ -82,6 +94,10 @@ void crust_state_init(CRUST_STATE ** state)
     crust_block_init(&(*state)->initialBlock, *state);
 }
 
+/*
+ * Fills 'block' with an address of the block identified by blockId and returns true if the block exists, otherwise
+ * returns false
+ */
 bool crust_block_get(unsigned int blockId, CRUST_BLOCK ** block, CRUST_STATE * state)
 {
     if(blockId < state->blockIndexPointer)

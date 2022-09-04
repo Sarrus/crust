@@ -82,6 +82,10 @@ size_t crust_print_block(CRUST_BLOCK * block, char * printBuffer) // printBuffer
     return strlen(printBuffer);
 }
 
+/*
+ * Creates a buffer containing the entire state as text, ready to be sent to listeners. A pointer to the text is placed
+ * in dynamicPrintBuffer and the length of the text is returned.
+ */
 unsigned long crust_print_state(CRUST_STATE * state, char ** dynamicPrintBuffer)
 {
     *dynamicPrintBuffer = NULL;
