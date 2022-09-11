@@ -34,5 +34,7 @@ struct crustState {
 
 void crust_state_init(CRUST_STATE ** state);
 bool crust_block_get(unsigned int blockId, CRUST_BLOCK ** block, CRUST_STATE * state);
+void crust_block_init(CRUST_BLOCK ** block, CRUST_STATE * state);
+int crust_block_insert(CRUST_BLOCK * block, CRUST_STATE * state);
 
 #endif //CRUST_STATE_H

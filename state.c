@@ -76,7 +76,10 @@ int crust_block_insert(CRUST_BLOCK * block, CRUST_STATE * state)
 
     for(int i = 0; i < CRUST_MAX_LINKS; i++)
     {
-        block->links[i]->links[crustLinkInversions[i]] = block;
+        if(block->links[i] != NULL)
+        {
+            block->links[i]->links[crustLinkInversions[i]] = block;
+        }
     }
 
     return 0;

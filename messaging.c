@@ -5,10 +5,13 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <errno.h>
 #include "messaging.h"
 #include "terminal.h"
 
 #define CRUST_PRINT_BUFFER_SIZE_INCREMENT 65536
+#define CRUST_DELIMITERS ";"
+#define CRUST_OPCODE_LENGTH 2
 
 /*
  * Note: when adding print functions, take care to avoid buffer overruns by calculating the maximum possible length of the
@@ -23,12 +26,41 @@ const char * crustLinkDesignations[] = {
         [downBranching] = "DB"
 };
 
+void crust_interpret_block(char * message, CRUST_BLOCK * block, CRUST_STATE * state)
+{
+    unsigned long long readValue;
+    char * conversionStopPoint;
+    CRUST_BLOCK * linkBlock;
+    char * segment;
+
+    while((segment = strsep(&message, CRUST_DELIMITERS)) != NULL)
+    {
+        for(int i = 0; i < CRUST_MAX_LINKS; i++)
+        {
+            if(!strncmp(crustLinkDesignations[i], segment, CRUST_OPCODE_LENGTH))
+            {
+                errno = 0;
+                conversionStopPoint = &segment[2];
+                readValue = strtoull(&segment[2], &conversionStopPoint, 10);
+                if(!errno
+                    && *conversionStopPoint == '\0'
+                    && readValue <= UINT32_MAX
+                    && crust_block_get(readValue, &linkBlock, state))
+                {
+                    block->links[i] = linkBlock;
+                    break;
+                }
+            }
+        }
+    }
+}
+
 /*
  * Takes a pointer to a CRUST message and the length of the message and returns the detected opcode. If there is an input
  * to go with the operation, fills operationInput. See CRUST_MIXED_OPERATION_INPUT for details. If the opcode is not
  * recognised or there is an error, returns NO_OPERATION.
  */
-CRUST_OPCODE crust_interpret_message(const char * message, unsigned int length, CRUST_MIXED_OPERATION_INPUT * operationInput)
+CRUST_OPCODE crust_interpret_message(char * message, unsigned int length, CRUST_MIXED_OPERATION_INPUT * operationInput, CRUST_STATE * state)
 {
     if(length < 2)
     {
@@ -41,6 +73,8 @@ CRUST_OPCODE crust_interpret_message(const char * message, unsigned int length, 
             switch(message[1])
             {
                 case 'B':
+                    crust_block_init(&operationInput->block, state);
+                    crust_interpret_block(message, operationInput->block, state);
                     return INSERT_BLOCK;
 
                 default:
@@ -73,7 +107,7 @@ size_t crust_print_block(CRUST_BLOCK * block, char * printBuffer) // printBuffer
     {
         if(block->links[i] != NULL)
         {
-            sprintf(partBuffer, "%s%i;", crustLinkDesignations[i], block->links[upMain]->blockId);
+            sprintf(partBuffer, "%s%i;", crustLinkDesignations[i], block->links[i]->blockId);
             strcat(printBuffer, partBuffer);
         }
     }

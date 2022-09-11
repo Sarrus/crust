@@ -26,10 +26,10 @@ struct crustInputBuffer {
 
 union crustMixedOperationInput
 {
-    CRUST_BLOCK block;
+    CRUST_BLOCK * block;
 };
 
-CRUST_OPCODE crust_interpret_message(const char * message, unsigned int length, CRUST_MIXED_OPERATION_INPUT * operationInput);
+CRUST_OPCODE crust_interpret_message(char * message, unsigned int length, CRUST_MIXED_OPERATION_INPUT * operationInput, CRUST_STATE * state);
 unsigned long crust_print_state(CRUST_STATE * state, char ** dynamicPrintBuffer);
 
 #endif //CRUST_MESSAGING_H

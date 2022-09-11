@@ -148,11 +148,28 @@ _Noreturn void crust_daemon_loop(CRUST_STATE * state)
                         CRUST_MIXED_OPERATION_INPUT operationInput;
                         CRUST_OPCODE opcode = crust_interpret_message(bufferList[i].buffer,
                                                                       bufferList[i].writePointer,
-                                                                      &operationInput);
+                                                                      &operationInput,
+                                                                      state);
                         switch(opcode)
                         {
                             case INSERT_BLOCK:
                                 crust_terminal_print_verbose("OPCODE: Insert Block");
+                                switch(crust_block_insert(operationInput.block, state))
+                                {
+                                    case 0:
+                                        crust_terminal_print_verbose("Block inserted successfully");
+                                        break;
+
+                                    case 1:
+                                        crust_terminal_print_verbose("Failed to insert block - no links");
+                                        free(operationInput.block);
+                                        break;
+
+                                    case 2:
+                                        crust_terminal_print_verbose("Failed to insert block - conflicting link(s)");
+                                        free(operationInput.block);
+                                        break;
+                                }
                                 break;
 
                             case RESEND_STATE:
