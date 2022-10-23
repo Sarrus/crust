@@ -44,8 +44,6 @@ void crust_block_init(CRUST_BLOCK ** block, CRUST_STATE * state)
     {
         (*block)->links[i] = NULL;
     }
-
-    crust_block_index_add(*block, state);
 }
 
 /*
@@ -81,7 +79,7 @@ int crust_block_insert(CRUST_BLOCK * block, CRUST_STATE * state)
             block->links[i]->links[crustLinkInversions[i]] = block;
         }
     }
-
+    crust_block_index_add(block, state);
     return 0;
 }
 
@@ -95,6 +93,7 @@ void crust_state_init(CRUST_STATE ** state)
     (*state)->blockIndexLength = 0;
     (*state)->blockIndexPointer = 0;
     crust_block_init(&(*state)->initialBlock, *state);
+    crust_block_index_add((*state)->initialBlock, *state);
 }
 
 /*
