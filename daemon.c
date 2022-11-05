@@ -51,12 +51,32 @@ void crust_handle_signal(int signal)
     }
 }
 
+/*
+ * Regenerates a buffer and poll list. Both should always be the same length as each entry on the poll list has a matching
+ * entry on the buffer list.
+ *
+ * The poll list is a list of connections to the CRUST socket. It is formatted to be passed to poll(). Each connection can
+ * be readable which means that the user is trying to send us some data or writable which means that the user is ready to
+ * receive some data from us.
+ *
+ * CRUST watches all connections for readability and processes instructions as they come in.
+ *
+ * CRUST only watches connections for writeability when it has some data to write. When there is no data to write, CRUST
+ * stops polling the connection for writeability.
+ *
+ * The buffer list contains a read buffer for each connection. The read buffer is a chunk of memory that contains an operation
+ * for CRUST to process. The user fills this buffer by writing to their connection. When they send either a CR or an LF, CRUST
+ * executes the operation and resets the buffer.
+ */
 void crust_poll_list_and_buffer_regen(struct pollfd ** list, int * listLength, int * listPointer, CRUST_INPUT_BUFFER ** buffer)
 {
     crust_terminal_print_verbose("Regenerating poll list...");
 
+    // On each regen we leave space for 100 new connections
     int newListLength = 100;
 
+    // Take our 100 new spaces and then add an additional one for each existing connection. (We don't count disconnected
+    // sockets which have a negative fd)
     for(int i = 0; i < *listPointer; i++)
     {
         if((*list)[i].fd > 0)
@@ -65,17 +85,23 @@ void crust_poll_list_and_buffer_regen(struct pollfd ** list, int * listLength, i
         }
     }
 
+    // Allocate the memory for the two new lists
     struct pollfd * newList = malloc(sizeof(struct pollfd) * newListLength);
     CRUST_INPUT_BUFFER * newBuffer = malloc(sizeof(CRUST_INPUT_BUFFER) * newListLength);
 
+    // Empty the two new lists
     memset(newList, '\0', sizeof(struct pollfd) * newListLength);
     memset(newBuffer, '\0', sizeof(CRUST_INPUT_BUFFER) * newListLength);
 
+    // Add the CRUST socket to the top of the list and set it to read. poll() will mark it as readable when a new connection
+    // is available.
     newList[0].fd = socketFp;
     newList[0].events = POLLRDBAND | POLLRDNORM;
 
+    // Point to the next free entry
     int newListPointer = 1;
 
+    // Copy each active entry from both of the old lists to both of the new lists.
     for(int i = 1; i < *listPointer; i++)
     {
         if((*list)[i].fd > 0)
@@ -91,6 +117,7 @@ void crust_poll_list_and_buffer_regen(struct pollfd ** list, int * listLength, i
         }
     }
 
+    // If we are replacing an existing pair of lists then free their associated memory
     if(*list)
     {
         free(*list);
@@ -99,6 +126,8 @@ void crust_poll_list_and_buffer_regen(struct pollfd ** list, int * listLength, i
     {
         free(*buffer);
     }
+
+    // Point to the new lists
     *list = newList;
     *listLength = newListLength;
     *listPointer = newListPointer;
@@ -107,18 +136,17 @@ void crust_poll_list_and_buffer_regen(struct pollfd ** list, int * listLength, i
 
 _Noreturn void crust_daemon_loop(CRUST_STATE * state)
 {
+    // Create a poll list and a buffer list
     struct pollfd * pollList = NULL;
     int pollListLength = 0;
     int pollListPointer = 0;
     CRUST_INPUT_BUFFER * bufferList = NULL;
-
     crust_poll_list_and_buffer_regen(&pollList, &pollListLength, &pollListPointer, &bufferList);
 
     for(;;)
     {
         // Poll. This will block until a socket becomes readable and / or a new connection is made.
         int pollResult = poll(&pollList[0], pollListPointer, -1);
-
         if(pollResult == -1)
         {
             crust_terminal_print("Error occurred while polling connections.");
@@ -134,24 +162,37 @@ _Noreturn void crust_daemon_loop(CRUST_STATE * state)
                 crust_terminal_print_verbose("Connection terminated.");
                 pollList[i].fd = -(pollList[i].fd);
             }
+            // Send some data if the socket is ready to be read
             else if(pollList[i].revents & (POLLRDBAND | POLLRDNORM))
             {
+                // Calculate how many bytes we can read
                 unsigned int bufferSpaceRemaining = CRUST_MAX_MESSAGE_LENGTH - bufferList[i].writePointer;
+
+                // Proceed if we have space to buffer the bytes
                 if(bufferSpaceRemaining)
                 {
+                    // Read bytes up to the maximum we can accept
                     size_t readBytes = read(pollList[i].fd, &bufferList[i].buffer[bufferList[i].writePointer], bufferSpaceRemaining);
+
+                    // Set the write pointer to the start of the remaining free space
                     bufferList[i].writePointer += readBytes;
+
+                    // If there are bytes in the buffer and the user has sent a CR or LF at the end then process the buffer
                     if(bufferList[i].writePointer > 0
                         && (bufferList[i].buffer[bufferList[i].writePointer - 1] == '\r'
                             || bufferList[i].buffer[bufferList[i].writePointer - 1] == '\n'))
                     {
+                        // Interpret the message from the user, splitting it into an opcode and optionally some input
                         CRUST_MIXED_OPERATION_INPUT operationInput;
                         CRUST_OPCODE opcode = crust_interpret_message(bufferList[i].buffer,
                                                                       bufferList[i].writePointer,
                                                                       &operationInput,
                                                                       state);
+
+                        // Process the user's operation
                         switch(opcode)
                         {
+                            // Attempt to insert a block and generate the appropriate response
                             case INSERT_BLOCK:
                                 crust_terminal_print_verbose("OPCODE: Insert Block");
                                 switch(crust_block_insert(operationInput.block, state))
@@ -172,6 +213,7 @@ _Noreturn void crust_daemon_loop(CRUST_STATE * state)
                                 }
                                 break;
 
+                            // Resend the entire state to the user
                             case RESEND_STATE:
                                 crust_terminal_print_verbose("OPCODE: Resend State");
                                 char * testPrintState;
@@ -182,14 +224,18 @@ _Noreturn void crust_daemon_loop(CRUST_STATE * state)
                                 }
                                 break;
 
+                            // Do nothing
                             case NO_OPERATION:
                                 crust_terminal_print_verbose("OPCODE: No Operation");
                                 break;
 
+                            // Report that the opcode was unrecognised.
                             default:
                                 crust_terminal_print_verbose("Unrecognised OPCODE");
                                 break;
                         }
+
+                        // Put the write pointer back to the beginning (clear the buffer)
                         bufferList[i].writePointer = 0;
                     }
                 }
@@ -203,6 +249,7 @@ _Noreturn void crust_daemon_loop(CRUST_STATE * state)
         // pollList[0] always contains the CRUST socket. This will show up as readable when a new connection is available
         if(pollList[0].revents & (POLLRDBAND | POLLRDNORM))
         {
+            // Accept the new connection and store it's fp
             int newSocketFp = accept(socketFp, NULL, 0);
             if(newSocketFp == -1)
             {
@@ -210,6 +257,7 @@ _Noreturn void crust_daemon_loop(CRUST_STATE * state)
                 exit(EXIT_FAILURE);
             }
 
+            // Set the connection to non-blocking
             if(fcntl(newSocketFp, F_SETFL, fcntl(newSocketFp, F_GETFL) | O_NONBLOCK) == -1)
             {
                 crust_terminal_print("Unable to make the new socket non-blocking.");
@@ -222,7 +270,7 @@ _Noreturn void crust_daemon_loop(CRUST_STATE * state)
                 crust_poll_list_and_buffer_regen(&pollList, &pollListLength, &pollListPointer, &bufferList);
             }
 
-            // Add the new connection to the poll list and request an alert if it becomes writable. (We will also be
+            // Add the new connection to the poll list and request an alert if it becomes readable. (We will also be
             // informed if the other end hangs up.)
             pollList[pollListPointer].fd = newSocketFp;
             pollList[pollListPointer].events = POLLRDBAND | POLLRDNORM;

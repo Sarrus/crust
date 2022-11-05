@@ -20,6 +20,7 @@
  * message.
  */
 
+// Each of the four types of link a block can have has a two letter designation.
 const char * crustLinkDesignations[] = {
         [upMain] = "UM",
         [upBranching] = "UB",
@@ -27,6 +28,10 @@ const char * crustLinkDesignations[] = {
         [downBranching] = "DB"
 };
 
+/*
+ * Takes a text based description of a block and a pointer to an empty block then fills the empty block based on the description.
+ * The block may then be inserted into the CRUST state with crust_block_insert().
+ */
 void crust_interpret_block(char * message, CRUST_BLOCK * block, CRUST_STATE * state)
 {
     unsigned long long readValue;
@@ -34,23 +39,29 @@ void crust_interpret_block(char * message, CRUST_BLOCK * block, CRUST_STATE * st
     CRUST_BLOCK * linkBlock;
     char * segment;
 
+    // Go through each ; delimited part of the message
     while((segment = strsep(&message, CRUST_DELIMITERS)) != NULL)
     {
+        // Check if the part begins with a link designation.
         for(int i = 0; i < CRUST_MAX_LINKS; i++)
         {
             if(!strncmp(crustLinkDesignations[i], segment, CRUST_OPCODE_LENGTH))
             {
+                // Try and convert the characters after the designation into an unsigned long long
                 errno = 0;
                 conversionStopPoint = &segment[2];
                 readValue = strtoull(&segment[2], &conversionStopPoint, 10);
-                if(!errno
-                    && *conversionStopPoint == '\0'
-                    && readValue <= UINT32_MAX
-                    && crust_block_get(readValue, &linkBlock, state))
+                // Check that:
+                if(!errno // There was no error
+                    && *conversionStopPoint == '\0' // There was no data after the number
+                    && readValue <= UINT32_MAX // The number isn't larger than tha maximum size of a block index
+                    && crust_block_get(readValue, &linkBlock, state)) // The referenced block exists
                 {
+                    // Link to the existing block
                     block->links[i] = linkBlock;
                     break;
                 }
+                // TODO: report to the user if they have referenced a non-existing block
             }
         }
     }
@@ -63,6 +74,7 @@ void crust_interpret_block(char * message, CRUST_BLOCK * block, CRUST_STATE * st
  */
 CRUST_OPCODE crust_interpret_message(char * message, unsigned int length, CRUST_MIXED_OPERATION_INPUT * operationInput, CRUST_STATE * state)
 {
+    // Return NOP if the message is too short
     if(length < 2)
     {
         return NO_OPERATION;
@@ -74,6 +86,7 @@ CRUST_OPCODE crust_interpret_message(char * message, unsigned int length, CRUST_
             switch(message[1])
             {
                 case 'B':
+                    // Initialise a block and try to fill it.
                     crust_block_init(&operationInput->block, state);
                     crust_interpret_block(message, operationInput->block, state);
                     return INSERT_BLOCK;
@@ -128,10 +141,12 @@ unsigned long crust_print_state(CRUST_STATE * state, char ** dynamicPrintBuffer)
     unsigned long printPointer = 0;
     char lineBuffer[CRUST_MAX_MESSAGE_LENGTH];
 
+    // Look up every block in the index one by one
     CRUST_BLOCK * blockToPrint;
     unsigned int blockToPrintId = 0;
     while(crust_block_get(blockToPrintId, &blockToPrint, state))
     {
+        // If there is less free space in the buffer than the maximum size of a message then resize the buffer
         if((printBufferSize - printPointer) < CRUST_MAX_MESSAGE_LENGTH)
         {
             printBufferSize += CRUST_PRINT_BUFFER_SIZE_INCREMENT;
@@ -143,6 +158,7 @@ unsigned long crust_print_state(CRUST_STATE * state, char ** dynamicPrintBuffer)
             }
         }
 
+        // Fill the line buffer with the details of the block, then add the line buffer to the end of the print buffer.
         size_t linePrintLength = crust_print_block(blockToPrint, lineBuffer);
         memcpy(*dynamicPrintBuffer + printPointer, lineBuffer, linePrintLength);
         printPointer += linePrintLength;

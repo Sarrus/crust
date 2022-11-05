@@ -4,6 +4,8 @@
 
 #define CRUST_BLOCK_INDEX_SIZE_INCREMENT 100
 
+// Each type of link has an inversion. For example, if downMain of block A points to block B then upMain of block B must
+// point to block A.
 const CRUST_LINK_TYPE crustLinkInversions[] = {
         [upMain] = downMain,
         [upBranching] = downBranching,
@@ -17,6 +19,7 @@ const CRUST_LINK_TYPE crustLinkInversions[] = {
  */
 void crust_block_index_add(CRUST_BLOCK * block, CRUST_STATE * state)
 {
+    // Resize the index if we are running out of space.
     if(state->blockIndexPointer >= state->blockIndexLength)
     {
         state->blockIndexLength += CRUST_BLOCK_INDEX_SIZE_INCREMENT;
@@ -28,6 +31,7 @@ void crust_block_index_add(CRUST_BLOCK * block, CRUST_STATE * state)
         }
     }
 
+    // Add the block to the index.
     state->blockIndex[state->blockIndexPointer] = block;
     block->blockId = state->blockIndexPointer;
     state->blockIndexPointer++;
@@ -50,7 +54,7 @@ void crust_block_init(CRUST_BLOCK ** block, CRUST_STATE * state)
  * Takes a CRUST block with one or more links set (up and down main and branching)
  * and attempts to insert them into the CRUST layout. Returns 0 on success or:
  * 1: The block could not be inserted because it contains no links
- * 2: The block could not be inserted because a link already exists to its target
+ * 2: The block could not be inserted because a link already exists to it's target
  * */
 int crust_block_insert(CRUST_BLOCK * block, CRUST_STATE * state)
 {
@@ -84,7 +88,8 @@ int crust_block_insert(CRUST_BLOCK * block, CRUST_STATE * state)
 }
 
 /*
- * Initialises a new crust state and creates block 0.
+ * Initialises a new crust state and creates block 0. Block 0 is created with no links. All other blocks in the state must
+ * have at least one link.
  */
 void crust_state_init(CRUST_STATE ** state)
 {
