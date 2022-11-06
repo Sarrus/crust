@@ -19,7 +19,8 @@ enum crustOpcode {
 #ifdef TESTING
     RESEND_LIPSUM,
 #endif
-    INSERT_BLOCK
+    INSERT_BLOCK,
+    START_LISTENING
 };
 
 struct crustInputBuffer {
@@ -33,6 +34,7 @@ union crustMixedOperationInput
 };
 
 CRUST_OPCODE crust_interpret_message(char * message, unsigned int length, CRUST_MIXED_OPERATION_INPUT * operationInput, CRUST_STATE * state);
+size_t crust_print_block(CRUST_BLOCK * block, char * printBuffer);
 unsigned long crust_print_state(CRUST_STATE * state, char ** dynamicPrintBuffer);
 
 #endif //CRUST_MESSAGING_H

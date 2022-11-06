@@ -110,6 +110,16 @@ CRUST_OPCODE crust_interpret_message(char * message, unsigned int length, CRUST_
                     return NO_OPERATION;
             }
 
+        case 'S':
+            switch(message[1])
+            {
+                case 'L':
+                    return START_LISTENING;
+
+                default:
+                    return NO_OPERATION;
+            }
+
         default:
             return NO_OPERATION;
     }

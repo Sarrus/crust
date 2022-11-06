@@ -35,6 +35,7 @@ struct crustBufferListEntry {
     unsigned int writeQueueArrival; // Points to the next available place in the queue (back of the queue)
     unsigned int writeQueueService; // Points to the next write to be executed / being executed (front of the queue)
     unsigned long currentWritePositionPointer; // Our position in the current CRUST_WRITE
+    bool listening; // Indicates that the user wants state change updates
 };
 
 _Noreturn void crust_daemon_stop()
@@ -185,8 +186,102 @@ void crust_write_queue_insert(struct pollfd * pollList, CRUST_BUFFER_LIST_ENTRY 
     pollList[listEntryID].events |= (POLLWRBAND | POLLWRNORM);
 }
 
+void crust_write_to_listeners(struct pollfd * pollList, CRUST_BUFFER_LIST_ENTRY * bufferList, int listLength,
+                              CRUST_WRITE * write)
+{
+    for(int i = 1; i < listLength; i++)
+    {
+        if(bufferList[i].listening)
+        {
+            crust_write_queue_insert(pollList, bufferList, i, write);
+        }
+    }
+
+    if(!(write->targets))
+    {
+        free(write);
+    }
+}
+
+void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPUT * operationInput, CRUST_STATE * state,
+                                struct pollfd * pollList, CRUST_BUFFER_LIST_ENTRY * bufferList, int listPosition, int listLength)
+{
+    CRUST_WRITE * write;
+
+    // Process the user's operation
+    switch(opcode)
+    {
+        // Attempt to insert a block and generate the appropriate response
+        case INSERT_BLOCK:
+            crust_terminal_print_verbose("OPCODE: Insert Block");
+            switch(crust_block_insert(operationInput->block, state))
+            {
+                case 0:
+                    crust_terminal_print_verbose("Block inserted successfully");
+                    write = malloc(sizeof(CRUST_WRITE));
+                    write->writeBuffer = malloc(CRUST_MAX_MESSAGE_LENGTH);
+                    write->bufferLength = crust_print_block(operationInput->block, write->writeBuffer);
+                    write->targets = 0;
+                    crust_write_to_listeners(pollList, bufferList, listLength, write);
+                    break;
+
+                case 1:
+                    crust_terminal_print_verbose("Failed to insert block - no links");
+                    free(operationInput->block);
+                    break;
+
+                case 2:
+                    crust_terminal_print_verbose("Failed to insert block - conflicting link(s)");
+                    free(operationInput->block);
+                    break;
+            }
+            break;
+
+            // Resend the entire state to the user
+        case RESEND_STATE:
+            crust_terminal_print_verbose("OPCODE: Resend State");
+            write = malloc(sizeof(CRUST_WRITE));
+            write->bufferLength = crust_print_state(state, &write->writeBuffer);
+            write->targets = 0;
+            crust_write_queue_insert(pollList, bufferList, listPosition, write);
+            break;
+
+#ifdef TESTING
+        case RESEND_LIPSUM:
+            crust_terminal_print_verbose("OPCODE: Resend Lipsum");
+            write = malloc(sizeof(CRUST_WRITE));
+            write->bufferLength = strlen(lipsum);
+            write->writeBuffer = malloc(write->bufferLength);
+            strcpy(write->writeBuffer, lipsum);
+            write->targets = 0;
+            crust_write_queue_insert(pollList, bufferList, listPosition, write);
+            break;
+#endif
+            // Send the state then send updates as it changes.
+        case START_LISTENING:
+            crust_terminal_print_verbose("OPCODE: Start Listening");
+            write = malloc(sizeof(CRUST_WRITE));
+            write->bufferLength = crust_print_state(state, &write->writeBuffer);
+            write->targets = 0;
+            crust_write_queue_insert(pollList, bufferList, listPosition, write);
+            bufferList[listPosition].listening = true;
+            break;
+
+            // Do nothing
+        case NO_OPERATION:
+            crust_terminal_print_verbose("OPCODE: No Operation");
+            break;
+
+            // Report that the opcode was unrecognised.
+        default:
+            crust_terminal_print_verbose("Unrecognised OPCODE");
+            break;
+    }
+}
+
 _Noreturn void crust_daemon_loop(CRUST_STATE * state)
 {
+    // TODO: Limit the size of the poll list
     // Create a poll list and a buffer list
     struct pollfd * pollList = NULL;
     int pollListLength = 0;
@@ -240,61 +335,7 @@ _Noreturn void crust_daemon_loop(CRUST_STATE * state)
                                                                       &operationInput,
                                                                       state);
 
-                        // Process the user's operation
-                        switch(opcode)
-                        {
-                            // Attempt to insert a block and generate the appropriate response
-                            case INSERT_BLOCK:
-                                crust_terminal_print_verbose("OPCODE: Insert Block");
-                                switch(crust_block_insert(operationInput.block, state))
-                                {
-                                    case 0:
-                                        crust_terminal_print_verbose("Block inserted successfully");
-                                        break;
-
-                                    case 1:
-                                        crust_terminal_print_verbose("Failed to insert block - no links");
-                                        free(operationInput.block);
-                                        break;
-
-                                    case 2:
-                                        crust_terminal_print_verbose("Failed to insert block - conflicting link(s)");
-                                        free(operationInput.block);
-                                        break;
-                                }
-                                break;
-
-                            // Resend the entire state to the user
-                            case RESEND_STATE:
-                                crust_terminal_print_verbose("OPCODE: Resend State");
-                                CRUST_WRITE * newWrite = malloc(sizeof(CRUST_WRITE));
-                                newWrite->bufferLength = crust_print_state(state, &newWrite->writeBuffer);
-                                newWrite->targets = 0;
-                                crust_write_queue_insert(pollList, bufferList, i, newWrite);
-                                break;
-
-#ifdef TESTING
-                            case RESEND_LIPSUM:
-                                crust_terminal_print_verbose("OPCODE: Resend Lipsum");
-                                CRUST_WRITE * lipsumWrite = malloc(sizeof(CRUST_WRITE));
-                                lipsumWrite->bufferLength = strlen(lipsum);
-                                lipsumWrite->writeBuffer = malloc(lipsumWrite->bufferLength);
-                                strcpy(lipsumWrite->writeBuffer, lipsum);
-                                lipsumWrite->targets = 0;
-                                crust_write_queue_insert(pollList, bufferList, i, lipsumWrite);
-                                break;
-#endif
-
-                            // Do nothing
-                            case NO_OPERATION:
-                                crust_terminal_print_verbose("OPCODE: No Operation");
-                                break;
-
-                            // Report that the opcode was unrecognised.
-                            default:
-                                crust_terminal_print_verbose("Unrecognised OPCODE");
-                                break;
-                        }
+                        crust_daemon_process_opcode(opcode, &operationInput, state, pollList, bufferList, i, pollListLength);
 
                         // Put the write pointer back to the beginning (clear the buffer)
                         bufferList[i].inputBuffer.writePointer = 0;
