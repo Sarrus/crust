@@ -101,6 +101,11 @@ CRUST_OPCODE crust_interpret_message(char * message, unsigned int length, CRUST_
                 case 'S':
                     return RESEND_STATE;
 
+#ifdef TESTING
+                case 'L':
+                    return RESEND_LIPSUM;
+#endif
+
                 default:
                     return NO_OPERATION;
             }

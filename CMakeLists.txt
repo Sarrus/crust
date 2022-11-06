@@ -7,4 +7,8 @@ if(APPLE)
     add_compile_definitions(MACOS)
 endif()
 
+if(DEFINED WITH_TESTING)
+    add_compile_definitions(TESTING)
+endif()
+
 add_executable(crust main.c daemon.c daemon.h options.h terminal.c terminal.h state.c state.h messaging.c messaging.h)

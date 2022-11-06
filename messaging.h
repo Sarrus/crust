@@ -16,6 +16,9 @@
 enum crustOpcode {
     NO_OPERATION,
     RESEND_STATE,
+#ifdef TESTING
+    RESEND_LIPSUM,
+#endif
     INSERT_BLOCK
 };
 

@@ -13,6 +13,9 @@
 #include "state.h"
 #include "options.h"
 #include "messaging.h"
+#ifdef TESTING
+#include "tools/lipsum.h"
+#endif
 
 #define CRUST_WRITE struct crustWrite
 #define CRUST_BUFFER_LIST_ENTRY struct crustBufferListEntry
@@ -270,6 +273,18 @@ _Noreturn void crust_daemon_loop(CRUST_STATE * state)
                                 crust_write_queue_insert(pollList, bufferList, i, newWrite);
                                 break;
 
+#ifdef TESTING
+                            case RESEND_LIPSUM:
+                                crust_terminal_print_verbose("OPCODE: Resend Lipsum");
+                                CRUST_WRITE * lipsumWrite = malloc(sizeof(CRUST_WRITE));
+                                lipsumWrite->bufferLength = strlen(lipsum);
+                                lipsumWrite->writeBuffer = malloc(lipsumWrite->bufferLength);
+                                strcpy(lipsumWrite->writeBuffer, lipsum);
+                                lipsumWrite->targets = 0;
+                                crust_write_queue_insert(pollList, bufferList, i, lipsumWrite);
+                                break;
+#endif
+
                             // Do nothing
                             case NO_OPERATION:
                                 crust_terminal_print_verbose("OPCODE: No Operation");
@@ -299,9 +314,9 @@ _Noreturn void crust_daemon_loop(CRUST_STATE * state)
                     ssize_t bytesWritten = write(pollList[i].fd,
                   bufferList[i].writeQueue[bufferList[i].writeQueueService]->writeBuffer + bufferList[i].currentWritePositionPointer,
                 bufferList[i].writeQueue[bufferList[i].writeQueueService]->bufferLength - bufferList[i].currentWritePositionPointer);
-                    crust_terminal_print_verbose("write");
+
                     // If no bytes can be written then stop and let the connection get re-polled
-                    if(!bytesWritten)
+                    if(bytesWritten < 1)
                     {
                         break;
                     }

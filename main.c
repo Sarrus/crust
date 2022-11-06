@@ -24,6 +24,11 @@
 #include "terminal.h"
 
 int main(int argc, char ** argv) {
+#ifdef TESTING
+    crust_terminal_print("WARNING: CRUST has been compiled with -DWITH_TESTING. This compile option enables insecure "
+                         "functionality and should NEVER be used in production. Stay safe out there.");
+#endif
+
     crustOptionVerbose = false;
     crustOptionDaemon = false;
     strcpy(crustOptionSocketPath, CRUST_DEFAULT_SOCKET_ADDRESS);
