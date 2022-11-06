@@ -15,6 +15,8 @@
 #include "messaging.h"
 
 #define CRUST_WRITE struct crustWrite
+#define CRUST_BUFFER_LIST_ENTRY struct crustBufferListEntry
+#define CRUST_MAX_WRITE_QUEUE_LENGTH 256
 
 static int socketFp;
 
@@ -22,6 +24,14 @@ struct crustWrite {
     char * writeBuffer;
     unsigned long bufferLength;
     unsigned int targets;
+};
+
+struct crustBufferListEntry {
+    CRUST_INPUT_BUFFER inputBuffer; // Where input from the user goes
+    CRUST_WRITE * writeQueue[CRUST_MAX_WRITE_QUEUE_LENGTH]; // A queue of CRUST_WRITES to be executed
+    char writeQueueArrival; // Points to the next available place in the queue (back of the queue)
+    char writeQueueService; // Points to the next write to be executed / being executed (front of the queue)
+    unsigned long currentWritePositionPointer; // Our position in the current CRUST_WRITE
 };
 
 _Noreturn void crust_daemon_stop()
@@ -52,10 +62,10 @@ void crust_handle_signal(int signal)
 }
 
 /*
- * Regenerates a buffer and poll list. Both should always be the same length as each entry on the poll list has a matching
- * entry on the buffer list.
+ * Regenerates a buffer and poll pollList. Both should always be the same length as each entry on the poll pollList has a matching
+ * entry on the buffer pollList.
  *
- * The poll list is a list of connections to the CRUST socket. It is formatted to be passed to poll(). Each connection can
+ * The poll pollList is a pollList of connections to the CRUST socket. It is formatted to be passed to poll(). Each connection can
  * be readable which means that the user is trying to send us some data or writable which means that the user is ready to
  * receive some data from us.
  *
@@ -64,13 +74,17 @@ void crust_handle_signal(int signal)
  * CRUST only watches connections for writeability when it has some data to write. When there is no data to write, CRUST
  * stops polling the connection for writeability.
  *
- * The buffer list contains a read buffer for each connection. The read buffer is a chunk of memory that contains an operation
+ * The buffer pollList contains a read buffer for each connection. The read buffer is a chunk of memory that contains an operation
  * for CRUST to process. The user fills this buffer by writing to their connection. When they send either a CR or an LF, CRUST
  * executes the operation and resets the buffer.
+ *
+ * The buffer pollList also contains a queue of CRUST_WRITEs for the connection. While there are writes in the queue, CRUST will
+ * send them to the connection whenever it is ready to be written to.
  */
-void crust_poll_list_and_buffer_regen(struct pollfd ** list, int * listLength, int * listPointer, CRUST_INPUT_BUFFER ** buffer)
+void crust_poll_list_and_buffer_list_regen(struct pollfd ** pollList, int * listLength, int * listPointer,
+                                           CRUST_BUFFER_LIST_ENTRY **bufferList)
 {
-    crust_terminal_print_verbose("Regenerating poll list...");
+    crust_terminal_print_verbose("Regenerating poll pollList...");
 
     // On each regen we leave space for 100 new connections
     int newListLength = 100;
@@ -79,24 +93,24 @@ void crust_poll_list_and_buffer_regen(struct pollfd ** list, int * listLength, i
     // sockets which have a negative fd)
     for(int i = 0; i < *listPointer; i++)
     {
-        if((*list)[i].fd > 0)
+        if((*pollList)[i].fd > 0)
         {
             newListLength++;
         }
     }
 
     // Allocate the memory for the two new lists
-    struct pollfd * newList = malloc(sizeof(struct pollfd) * newListLength);
-    CRUST_INPUT_BUFFER * newBuffer = malloc(sizeof(CRUST_INPUT_BUFFER) * newListLength);
+    struct pollfd * newPollList = malloc(sizeof(struct pollfd) * newListLength);
+    CRUST_BUFFER_LIST_ENTRY * newBufferList = malloc(sizeof(CRUST_BUFFER_LIST_ENTRY) * newListLength);
 
     // Empty the two new lists
-    memset(newList, '\0', sizeof(struct pollfd) * newListLength);
-    memset(newBuffer, '\0', sizeof(CRUST_INPUT_BUFFER) * newListLength);
+    memset(newPollList, '\0', sizeof(struct pollfd) * newListLength);
+    memset(newBufferList, '\0', sizeof(CRUST_BUFFER_LIST_ENTRY) * newListLength);
 
-    // Add the CRUST socket to the top of the list and set it to read. poll() will mark it as readable when a new connection
+    // Add the CRUST socket to the top of the pollList and set it to read. poll() will mark it as readable when a new connection
     // is available.
-    newList[0].fd = socketFp;
-    newList[0].events = POLLRDBAND | POLLRDNORM;
+    newPollList[0].fd = socketFp;
+    newPollList[0].events = POLLRDBAND | POLLRDNORM;
 
     // Point to the next free entry
     int newListPointer = 1;
@@ -104,34 +118,41 @@ void crust_poll_list_and_buffer_regen(struct pollfd ** list, int * listLength, i
     // Copy each active entry from both of the old lists to both of the new lists.
     for(int i = 1; i < *listPointer; i++)
     {
-        if((*list)[i].fd > 0)
+        if((*pollList)[i].fd > 0)
         {
-            newList[newListPointer].fd = (*list)[i].fd;
-            newList[newListPointer].events = (*list)[i].events;
-            newBuffer[newListPointer].writePointer = (*buffer)[i].writePointer;
+            newPollList[newListPointer].fd = (*pollList)[i].fd;
+            newPollList[newListPointer].events = (*pollList)[i].events;
+            newBufferList[newListPointer].inputBuffer.writePointer = (*bufferList)[i].inputBuffer.writePointer;
+            newBufferList[newListPointer].writeQueueArrival = (*bufferList)[i].writeQueueArrival;
+            newBufferList[newListPointer].writeQueueService = (*bufferList)[i].writeQueueService;
+            newBufferList[newListPointer].currentWritePositionPointer = (*bufferList)[i].currentWritePositionPointer;
             for(int j = 0; j < CRUST_MAX_MESSAGE_LENGTH; j++)
             {
-                newBuffer[newListPointer].buffer[j] = (*buffer)[i].buffer[j];
+                newBufferList[newListPointer].inputBuffer.buffer[j] = (*bufferList)[i].inputBuffer.buffer[j];
+            }
+            for(int j = 0; j < CRUST_MAX_WRITE_QUEUE_LENGTH; j++)
+            {
+                newBufferList[newListPointer].writeQueue[j] = (*bufferList)[i].writeQueue[j];
             }
             newListPointer++;
         }
     }
 
     // If we are replacing an existing pair of lists then free their associated memory
-    if(*list)
+    if(*pollList)
     {
-        free(*list);
+        free(*pollList);
     }
-    if(*buffer)
+    if(*bufferList)
     {
-        free(*buffer);
+        free(*bufferList);
     }
 
     // Point to the new lists
-    *list = newList;
+    *pollList = newPollList;
     *listLength = newListLength;
     *listPointer = newListPointer;
-    *buffer = newBuffer;
+    *bufferList = newBufferList;
 }
 
 _Noreturn void crust_daemon_loop(CRUST_STATE * state)
@@ -140,8 +161,8 @@ _Noreturn void crust_daemon_loop(CRUST_STATE * state)
     struct pollfd * pollList = NULL;
     int pollListLength = 0;
     int pollListPointer = 0;
-    CRUST_INPUT_BUFFER * bufferList = NULL;
-    crust_poll_list_and_buffer_regen(&pollList, &pollListLength, &pollListPointer, &bufferList);
+    CRUST_BUFFER_LIST_ENTRY * bufferList = NULL;
+    crust_poll_list_and_buffer_list_regen(&pollList, &pollListLength, &pollListPointer, &bufferList);
 
     for(;;)
     {
@@ -166,26 +187,26 @@ _Noreturn void crust_daemon_loop(CRUST_STATE * state)
             else if(pollList[i].revents & (POLLRDBAND | POLLRDNORM))
             {
                 // Calculate how many bytes we can read
-                unsigned int bufferSpaceRemaining = CRUST_MAX_MESSAGE_LENGTH - bufferList[i].writePointer;
+                unsigned int bufferSpaceRemaining = CRUST_MAX_MESSAGE_LENGTH - bufferList[i].inputBuffer.writePointer;
 
                 // Proceed if we have space to buffer the bytes
                 if(bufferSpaceRemaining)
                 {
                     // Read bytes up to the maximum we can accept
-                    size_t readBytes = read(pollList[i].fd, &bufferList[i].buffer[bufferList[i].writePointer], bufferSpaceRemaining);
+                    size_t readBytes = read(pollList[i].fd, &bufferList[i].inputBuffer.buffer[bufferList[i].inputBuffer.writePointer], bufferSpaceRemaining);
 
                     // Set the write pointer to the start of the remaining free space
-                    bufferList[i].writePointer += readBytes;
+                    bufferList[i].inputBuffer.writePointer += readBytes;
 
                     // If there are bytes in the buffer and the user has sent a CR or LF at the end then process the buffer
-                    if(bufferList[i].writePointer > 0
-                        && (bufferList[i].buffer[bufferList[i].writePointer - 1] == '\r'
-                            || bufferList[i].buffer[bufferList[i].writePointer - 1] == '\n'))
+                    if(bufferList[i].inputBuffer.writePointer > 0
+                        && (bufferList[i].inputBuffer.buffer[bufferList[i].inputBuffer.writePointer - 1] == '\r'
+                            || bufferList[i].inputBuffer.buffer[bufferList[i].inputBuffer.writePointer - 1] == '\n'))
                     {
                         // Interpret the message from the user, splitting it into an opcode and optionally some input
                         CRUST_MIXED_OPERATION_INPUT operationInput;
-                        CRUST_OPCODE opcode = crust_interpret_message(bufferList[i].buffer,
-                                                                      bufferList[i].writePointer,
+                        CRUST_OPCODE opcode = crust_interpret_message(bufferList[i].inputBuffer.buffer,
+                                                                      bufferList[i].inputBuffer.writePointer,
                                                                       &operationInput,
                                                                       state);
 
@@ -236,7 +257,7 @@ _Noreturn void crust_daemon_loop(CRUST_STATE * state)
                         }
 
                         // Put the write pointer back to the beginning (clear the buffer)
-                        bufferList[i].writePointer = 0;
+                        bufferList[i].inputBuffer.writePointer = 0;
                     }
                 }
                 else
@@ -267,7 +288,7 @@ _Noreturn void crust_daemon_loop(CRUST_STATE * state)
             // The poll list needs to be regenerated if we run out of space.
             if(pollListLength <= pollListPointer)
             {
-                crust_poll_list_and_buffer_regen(&pollList, &pollListLength, &pollListPointer, &bufferList);
+                crust_poll_list_and_buffer_list_regen(&pollList, &pollListLength, &pollListPointer, &bufferList);
             }
 
             // Add the new connection to the poll list and request an alert if it becomes readable. (We will also be
