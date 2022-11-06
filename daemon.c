@@ -16,7 +16,7 @@
 
 #define CRUST_WRITE struct crustWrite
 #define CRUST_BUFFER_LIST_ENTRY struct crustBufferListEntry
-#define CRUST_MAX_WRITE_QUEUE_LENGTH 256
+#define CRUST_MAX_WRITE_QUEUE_LENGTH 5
 
 static int socketFp;
 
@@ -29,8 +29,8 @@ struct crustWrite {
 struct crustBufferListEntry {
     CRUST_INPUT_BUFFER inputBuffer; // Where input from the user goes
     CRUST_WRITE * writeQueue[CRUST_MAX_WRITE_QUEUE_LENGTH]; // A queue of CRUST_WRITES to be executed
-    char writeQueueArrival; // Points to the next available place in the queue (back of the queue)
-    char writeQueueService; // Points to the next write to be executed / being executed (front of the queue)
+    unsigned int writeQueueArrival; // Points to the next available place in the queue (back of the queue)
+    unsigned int writeQueueService; // Points to the next write to be executed / being executed (front of the queue)
     unsigned long currentWritePositionPointer; // Our position in the current CRUST_WRITE
 };
 
@@ -155,6 +155,33 @@ void crust_poll_list_and_buffer_list_regen(struct pollfd ** pollList, int * list
     *bufferList = newBufferList;
 }
 
+void crust_write_queue_insert(struct pollfd * pollList, CRUST_BUFFER_LIST_ENTRY * bufferList, int listEntryID,
+                                CRUST_WRITE * writeToInsert)
+{
+    // Check that the write queue isn't full
+    if((bufferList[listEntryID].writeQueueArrival + 1) % CRUST_MAX_WRITE_QUEUE_LENGTH == bufferList[listEntryID].writeQueueService)
+    {
+        crust_terminal_print_verbose("Write queue filled, terminating connection");
+        close(pollList[listEntryID].fd);
+        pollList[listEntryID].fd = -(pollList[listEntryID].fd);
+        // TODO: If there are no other connections waiting for this CRUST_WRITE, free() the write.
+        return;
+    }
+
+    // Add the new entry to the queue
+    bufferList[listEntryID].writeQueue[bufferList[listEntryID].writeQueueArrival] = writeToInsert;
+
+    // Update queue pointers
+    (bufferList[listEntryID].writeQueueArrival)++;
+    bufferList[listEntryID].writeQueueArrival %= CRUST_MAX_WRITE_QUEUE_LENGTH;
+
+    // Update count of targets
+    (writeToInsert->targets)++;
+
+    // Enable listening for writes
+    pollList[listEntryID].events |= (POLLWRBAND | POLLWRNORM);
+}
+
 _Noreturn void crust_daemon_loop(CRUST_STATE * state)
 {
     // Create a poll list and a buffer list
@@ -237,12 +264,10 @@ _Noreturn void crust_daemon_loop(CRUST_STATE * state)
                             // Resend the entire state to the user
                             case RESEND_STATE:
                                 crust_terminal_print_verbose("OPCODE: Resend State");
-                                char * testPrintState;
-                                unsigned long testPrintBytes = crust_print_state(state, &testPrintState);
-                                for(int j = 0; j < testPrintBytes; j++)
-                                {
-                                    fputc(testPrintState[j], stdout);
-                                }
+                                CRUST_WRITE * newWrite = malloc(sizeof(CRUST_WRITE));
+                                newWrite->bufferLength = crust_print_state(state, &newWrite->writeBuffer);
+                                newWrite->targets = 0;
+                                crust_write_queue_insert(pollList, bufferList, i, newWrite);
                                 break;
 
                             // Do nothing
@@ -263,6 +288,44 @@ _Noreturn void crust_daemon_loop(CRUST_STATE * state)
                 else
                 {
                     //TODO: Deal with a full buffer
+                }
+            }
+            else if(pollList[i].revents & (POLLWRBAND | POLLWRNORM))
+            {
+                // Go through the write queue in order
+                for(;;)
+                {
+                    // Attempt a write
+                    ssize_t bytesWritten = write(pollList[i].fd,
+                  bufferList[i].writeQueue[bufferList[i].writeQueueService]->writeBuffer + bufferList[i].currentWritePositionPointer,
+                bufferList[i].writeQueue[bufferList[i].writeQueueService]->bufferLength - bufferList[i].currentWritePositionPointer);
+                    crust_terminal_print_verbose("write");
+                    // If no bytes can be written then stop and let the connection get re-polled
+                    if(!bytesWritten)
+                    {
+                        break;
+                    }
+
+                    bufferList[i].currentWritePositionPointer += bytesWritten;
+
+                    // If the write suceedes completely, drop it from the queue and try the next entry
+                    if(bufferList[i].currentWritePositionPointer == bufferList[i].writeQueue[bufferList[i].writeQueueService]->bufferLength)
+                    {
+                        (bufferList[i].writeQueue[bufferList[i].writeQueueService]->targets)--;
+                        if(!bufferList[i].writeQueue[bufferList[i].writeQueueService]->targets)
+                        {
+                            free(bufferList[i].writeQueue[bufferList[i].writeQueueService]);
+                        }
+                        bufferList[i].currentWritePositionPointer = 0;
+                        (bufferList[i].writeQueueService)++;
+                        bufferList[i].writeQueueService %= CRUST_MAX_WRITE_QUEUE_LENGTH;
+                    }
+                    // If all writes complete, unflag the connection for writing.
+                    if(bufferList[i].writeQueueArrival == bufferList[i].writeQueueService)
+                    {
+                        pollList[i].events ^= (POLLWRBAND | POLLWRNORM);
+                        break;
+                    }
                 }
             }
         }
