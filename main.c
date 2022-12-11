@@ -22,6 +22,7 @@
 #include <pwd.h>
 #include <grp.h>
 #include <sys/types.h>
+#include <unistd.h>
 #include "daemon.h"
 #include "options.h"
 #include "terminal.h"
@@ -37,9 +38,13 @@ int main(int argc, char ** argv) {
 
     crustOptionVerbose = false;
     crustOptionDaemon = false;
-    strcpy(crustOptionRunDirectory, CRUST_DEFAULT_RUN_DIRECTORY);
-    crustOptionTargetUser = 0;
-    crustOptionTargetGroup = 0;
+    strncpy(crustOptionRunDirectory, CRUST_RUN_DIRECTORY, PATH_MAX);
+    strncpy(crustOptionSocketPath, CRUST_RUN_DIRECTORY, PATH_MAX);
+    strncat(crustOptionSocketPath, CRUST_SOCKET_NAME, PATH_MAX - strlen(crustOptionSocketPath) - 1);
+    crustOptionSetUser = false;
+    crustOptionTargetUser = getuid();
+    crustOptionSetGroup = false;
+    crustOptionTargetGroup = getgid();
 
     struct passwd * userInfo = NULL;
     struct group * groupInfo = NULL;
@@ -61,6 +66,7 @@ int main(int argc, char ** argv) {
                     crust_terminal_print("Unrecognised group.");
                     exit(EXIT_FAILURE);
                 }
+                crustOptionSetGroup = true;
                 crustOptionTargetGroup = groupInfo->gr_gid;
                 break;
 
@@ -68,10 +74,11 @@ int main(int argc, char ** argv) {
                 crust_terminal_print("CRUST: Consolidated Realtime Updates on Status of Trains");
                 crust_terminal_print("Usage: crust [options]");
                 crust_terminal_print("  -d  Run in daemon mode.");
-                crust_terminal_print("  -g  Switch to this group after completing setup. "
+                crust_terminal_print("  -g  Switch to this group after completing setup (if run as root) and set this "
+                                     "group on the CRUST run directory. "
                                      "(Defaults to the primary group of the user specified by -u.)");
                 crust_terminal_print("  -h  Display this help.");
-                crust_terminal_print("  -s  Define the address for the CRUST socket.");
+                crust_terminal_print("  -r  Specify the run directory used to hold the CRUST socket. ");
                 crust_terminal_print("  -u  Switch to this user after completing setup. "
                                      "(Only works if starting as root.)");
                 crust_terminal_print("  -v  Display verbose output.");
@@ -80,6 +87,13 @@ int main(int argc, char ** argv) {
             case 'r':
                 strncpy(crustOptionRunDirectory, optarg, PATH_MAX);
                 crustOptionRunDirectory[PATH_MAX - 1] = '\0';
+                size_t runDirectoryPathLength = strnlen(crustOptionRunDirectory, PATH_MAX - 1);
+                if(crustOptionRunDirectory[runDirectoryPathLength - 1] != '/')
+                {
+                    crustOptionRunDirectory[runDirectoryPathLength] = '/';
+                }
+                strncpy(crustOptionSocketPath, crustOptionRunDirectory, PATH_MAX);
+                strncat(crustOptionSocketPath, CRUST_SOCKET_NAME, PATH_MAX - strlen(crustOptionSocketPath) - 1);
                 break;
 
             case 'u':
@@ -89,9 +103,11 @@ int main(int argc, char ** argv) {
                     crust_terminal_print("Unrecognised user.");
                     exit(EXIT_FAILURE);
                 }
+                crustOptionSetUser = true;
                 crustOptionTargetUser = userInfo->pw_uid;
-                if(!crustOptionTargetGroup)
+                if(!crustOptionSetGroup)
                 {
+                    crustOptionSetGroup = true;
                     crustOptionTargetGroup = userInfo->pw_gid;
                 }
                 break;
@@ -104,12 +120,6 @@ int main(int argc, char ** argv) {
             default:
                 exit(EXIT_FAILURE);
         }
-    }
-
-    if((strlen(crustOptionRunDirectory) + strlen(CRUST_SOCKET_NAME)) > PATH_MAX)
-    {
-        crust_terminal_print("CRUST run directory path is too long.");
-        exit(EXIT_FAILURE);
     }
 
     if(crustOptionDaemon)

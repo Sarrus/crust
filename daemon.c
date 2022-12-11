@@ -424,16 +424,51 @@ _Noreturn void crust_daemon_loop(CRUST_STATE * state)
 _Noreturn void crust_daemon_run()
 {
     crust_terminal_print_verbose("CRUST daemon starting...");
-    crust_terminal_print_verbose("Building initial state...");
-
-    CRUST_STATE * state;
-    crust_state_init(&state);
 
     crust_terminal_print_verbose("Removing previous CRUST socket...");
     if((unlink(crustOptionSocketPath) == -1) && (errno != ENOENT))
     {
-        crust_terminal_print("Unable to remove previous CRUST socket or socket address invalid");
+        crust_terminal_print("Unable to remove previous CRUST socket");
         exit(EXIT_FAILURE);
+    }
+
+    crust_terminal_print_verbose("Removing previous CRUST run directory...");
+    if((rmdir(crustOptionRunDirectory) == -1) && (errno != ENOENT))
+    {
+        crust_terminal_print("Unable to remove previous CRUST run directory");
+        exit(EXIT_FAILURE);
+    }
+
+    crust_terminal_print_verbose("Creating CRUST run directory...");
+    if(mkdir(crustOptionRunDirectory, S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH) && (errno != EEXIST))
+    {
+        crust_terminal_print("Unable to create CRUST run directory");
+        exit(EXIT_FAILURE);
+    }
+
+    if(chown(crustOptionRunDirectory, crustOptionTargetUser, crustOptionTargetGroup))
+    {
+        crust_terminal_print("Unable to set owner of CRUST run directory");
+        exit(EXIT_FAILURE);
+    }
+
+    if(crustOptionSetGroup)
+    {
+        crust_terminal_print_verbose("Attempting to set process GID...");
+        if(setgid(crustOptionTargetGroup))
+        {
+            crust_terminal_print("Unable to set process GID, continuing with default");
+        }
+    }
+
+    if(crustOptionSetUser)
+    {
+        crust_terminal_print_verbose("Setting process UID...");
+        if(setuid(crustOptionTargetUser))
+        {
+            crust_terminal_print("Unable to set process UID");
+            exit(EXIT_FAILURE);
+        }
     }
 
     crust_terminal_print_verbose("Creating CRUST socket...");
@@ -476,13 +511,6 @@ _Noreturn void crust_daemon_run()
     // Bind to the VFS
     if(bind(socketFp, socketAddress, addrLength) == -1)
     {
-        if(errno == ENOENT)
-        {
-            crust_terminal_print("Unable to create CRUST socket - no such file or directory. Please ensure that the "
-                                 "specified directory exists (CRUST will create the socket itself).");
-            exit(EXIT_FAILURE);
-        }
-
         if(errno == EACCES)
         {
             crust_terminal_print("Unable to create CRUST socket - permission denied. Please ensure that the process "
@@ -510,6 +538,11 @@ _Noreturn void crust_daemon_run()
         crust_terminal_print("Unable to make the CRUST socket non-blocking.");
         exit(EXIT_FAILURE);
     }
+
+    crust_terminal_print_verbose("Building initial state...");
+
+    CRUST_STATE * state;
+    crust_state_init(&state);
 
     // Start accepting connections
     if(listen(socketFp, CRUST_SOCKET_QUEUE_LIMIT))
