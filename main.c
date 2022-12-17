@@ -26,6 +26,7 @@
 #include "daemon.h"
 #include "options.h"
 #include "terminal.h"
+#include "watcher.h"
 #ifdef MACOS
 #include <uuid/uuid.h>
 #endif
@@ -37,7 +38,7 @@ int main(int argc, char ** argv) {
 #endif
 
     crustOptionVerbose = false;
-    crustOptionDaemon = false;
+    crustOptionRunMode = CLI;
     strncpy(crustOptionRunDirectory, CRUST_RUN_DIRECTORY, PATH_MAX);
     strncpy(crustOptionSocketPath, CRUST_RUN_DIRECTORY, PATH_MAX);
     strncat(crustOptionSocketPath, CRUST_SOCKET_NAME, PATH_MAX - strlen(crustOptionSocketPath) - 1);
@@ -51,12 +52,12 @@ int main(int argc, char ** argv) {
 
     opterr = true;
     int option;
-    while((option = getopt(argc, argv, "dg:hr:u:v")) != -1)
+    while((option = getopt(argc, argv, "dg:hr:u:vw:")) != -1)
     {
         switch(option)
         {
             case 'd':
-                crustOptionDaemon = true;
+                crustOptionRunMode = DAEMON;
                 break;
 
             case 'g':
@@ -116,15 +117,29 @@ int main(int argc, char ** argv) {
                 crustOptionVerbose = true;
                 break;
 
+            case 'w':
+                crustOptionRunMode = WATCHER;
+                strncpy(crustOptionGPIOPath, optarg, PATH_MAX - 1);
+                crustOptionGPIOPath[PATH_MAX - 1] = '\0';
+                break;
+
             case '?':
             default:
                 exit(EXIT_FAILURE);
         }
     }
 
-    if(crustOptionDaemon)
+    switch(crustOptionRunMode)
     {
-        crust_daemon_run();
+        default:
+        case CLI:
+            break;
+
+        case DAEMON:
+            crust_daemon_run();
+
+        case WATCHER:
+            crust_watcher_run();
     }
 
     return EXIT_SUCCESS;

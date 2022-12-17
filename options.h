@@ -13,10 +13,17 @@
 #define CRUST_DEFAULT_SOCKET_UMASK 0117
 #define CRUST_SOCKET_QUEUE_LIMIT 4096
 
+enum crustRunMode {
+    CLI,
+    DAEMON,
+    WATCHER
+};
+
 bool crustOptionVerbose;
-bool crustOptionDaemon;
+enum crustRunMode crustOptionRunMode;
 char crustOptionRunDirectory[PATH_MAX];
 char crustOptionSocketPath[PATH_MAX];
+char crustOptionGPIOPath[PATH_MAX];
 bool crustOptionSetUser;
 uid_t crustOptionTargetUser;
 bool crustOptionSetGroup;
