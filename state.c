@@ -2,7 +2,7 @@
 #include "state.h"
 #include "terminal.h"
 
-#define CRUST_BLOCK_INDEX_SIZE_INCREMENT 100
+#define CRUST_INDEX_SIZE_INCREMENT 100
 
 // Each type of link has an inversion. For example, if downMain of block A points to block B then upMain of block B must
 // point to block A.
@@ -13,6 +13,20 @@ const CRUST_LINK_TYPE crustLinkInversions[] = {
         [downBranching] = upBranching
 };
 
+void crust_index_regrow(void ** index, unsigned int * indexLength, const unsigned int * indexPointer, size_t entrySize)
+{
+    if(*indexPointer >= *indexLength)
+    {
+        *indexLength += CRUST_INDEX_SIZE_INCREMENT;
+        *index = realloc(*index, *indexLength * entrySize);
+        if(*index == NULL)
+        {
+            crust_terminal_print("Failed to grow an index.");
+            exit(EXIT_FAILURE);
+        }
+    }
+}
+
 /*
  * Adds a block to the block index, enabling CRUST to locate it by its block ID which is allocated at the same time.
  * All blocks that form part of the live layout must be in the index.
@@ -20,16 +34,7 @@ const CRUST_LINK_TYPE crustLinkInversions[] = {
 void crust_block_index_add(CRUST_BLOCK * block, CRUST_STATE * state)
 {
     // Resize the index if we are running out of space.
-    if(state->blockIndexPointer >= state->blockIndexLength)
-    {
-        state->blockIndexLength += CRUST_BLOCK_INDEX_SIZE_INCREMENT;
-        state->blockIndex = realloc(state->blockIndex, state->blockIndexLength);
-        if(state->blockIndex == NULL)
-        {
-            crust_terminal_print("Failed to grow block index.");
-            exit(EXIT_FAILURE);
-        }
-    }
+    crust_index_regrow((void **) &state->blockIndex, &state->blockIndexLength, &state->blockIndexPointer, sizeof(CRUST_BLOCK *));
 
     // Add the block to the index.
     state->blockIndex[state->blockIndexPointer] = block;
@@ -48,6 +53,23 @@ void crust_block_init(CRUST_BLOCK ** block, CRUST_STATE * state)
     {
         (*block)->links[i] = NULL;
     }
+}
+
+void crust_track_circuit_index_add(CRUST_TRACK_CIRCUIT * trackCircuit, CRUST_STATE * state)
+{
+    crust_index_regrow((void **) &state->trackCircuitIndex, &state->trackCircuitIndexLength, &state->trackCircuitIndexPointer, sizeof(CRUST_TRACK_CIRCUIT *));
+
+    state->trackCircuitIndex[state->trackCircuitIndexPointer] = trackCircuit;
+    trackCircuit->trackCircuitId = state->trackCircuitIndexPointer;
+    state->trackCircuitIndexPointer++;
+}
+
+void crust_track_circuit_init(CRUST_TRACK_CIRCUIT ** trackCircuit, CRUST_STATE * state)
+{
+    *trackCircuit = malloc(sizeof(CRUST_TRACK_CIRCUIT));
+    (*trackCircuit)->blocks = NULL;
+    (*trackCircuit)->numBlocks = 0;
+    (*trackCircuit)->occupied = true; // Track circuits always start out occupied
 }
 
 /*
@@ -97,6 +119,9 @@ void crust_state_init(CRUST_STATE ** state)
     (*state)->blockIndex = NULL;
     (*state)->blockIndexLength = 0;
     (*state)->blockIndexPointer = 0;
+    (*state)->trackCircuitIndex = NULL;
+    (*state)->trackCircuitIndexLength = 0;
+    (*state)->trackCircuitIndexPointer = 0;
     crust_block_init(&(*state)->initialBlock, *state);
     crust_block_index_add((*state)->initialBlock, *state);
 }
