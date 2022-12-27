@@ -24,11 +24,12 @@ enum crustLinkType {
 struct crustBlock {
     u_int32_t blockId;
     CRUST_BLOCK * links[CRUST_MAX_LINKS];
+    CRUST_TRACK_CIRCUIT * trackCircuit;
 };
 
 struct crustTrackCircuit {
     u_int32_t trackCircuitId;
-    CRUST_BLOCK * blocks;
+    CRUST_BLOCK ** blocks;
     u_int32_t numBlocks;
     bool occupied;
 };
@@ -48,5 +49,6 @@ bool crust_block_get(unsigned int blockId, CRUST_BLOCK ** block, CRUST_STATE * s
 void crust_block_init(CRUST_BLOCK ** block, CRUST_STATE * state);
 void crust_track_circuit_init(CRUST_TRACK_CIRCUIT ** trackCircuit, CRUST_STATE * state);
 int crust_block_insert(CRUST_BLOCK * block, CRUST_STATE * state);
+int crust_track_circuit_insert(CRUST_TRACK_CIRCUIT * trackCircuit, CRUST_STATE * state);
 
 #endif //CRUST_STATE_H

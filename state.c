@@ -110,6 +110,39 @@ int crust_block_insert(CRUST_BLOCK * block, CRUST_STATE * state)
 }
 
 /*
+ * Takes a CRUST track circuit containing one or more blocks and attempts to insert it, returns 0 on success or:
+ * 1: The track circuit references no blocks
+ * 2: One or more of the referenced blocks are part of a different track circuit
+ */
+int crust_track_circuit_insert(CRUST_TRACK_CIRCUIT * trackCircuit, CRUST_STATE * state)
+{
+    // Check that at least one block is referenced
+    if(!trackCircuit->numBlocks)
+    {
+        return 1;
+    }
+
+    // Check that all the referenced blocks are not already part of a track circuit
+    for(u_int32_t i = 0; i < trackCircuit->numBlocks; i++)
+    {
+        if(trackCircuit->blocks[i]->trackCircuit != NULL)
+        {
+            return 2;
+        }
+    }
+
+    // Update the referenced blocks with the new track circuit
+    for(u_int32_t i = 0; i < trackCircuit->numBlocks; i++)
+    {
+        trackCircuit->blocks[i]->trackCircuit = trackCircuit;
+    }
+    // Add the track circuit to the index
+    crust_track_circuit_index_add(trackCircuit, state);
+
+    return 0;
+}
+
+/*
  * Initialises a new crust state and creates block 0. Block 0 is created with no links. All other blocks in the state must
  * have at least one link.
  */

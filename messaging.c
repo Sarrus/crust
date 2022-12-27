@@ -67,6 +67,33 @@ void crust_interpret_block(char * message, CRUST_BLOCK * block, CRUST_STATE * st
     }
 }
 
+void crust_interpret_track_circuit(char * message, CRUST_TRACK_CIRCUIT * trackCircuit, CRUST_STATE * state)
+{
+    unsigned long long readValue;
+    char * conversionStopPoint;
+    CRUST_BLOCK * memberBlock;
+    char * segment;
+
+    // Go through each ; delimited part of the message
+    while((segment = strsep(&message, CRUST_DELIMITERS)) != NULL)
+    {
+        errno = 0;
+        conversionStopPoint = segment;
+        readValue = strtoull(segment, &conversionStopPoint, 10);
+        // Check that:
+        if(!errno // There was no error
+           && *conversionStopPoint == '\0' // There was no data after the number
+           && readValue <= UINT32_MAX // The number isn't larger than tha maximum size of an index
+           && crust_block_get(readValue, &memberBlock, state)) // The referenced block exists
+        {
+            trackCircuit->blocks = realloc(trackCircuit->blocks, sizeof(CRUST_BLOCK *) * (trackCircuit->numBlocks + 1));
+            trackCircuit->blocks[trackCircuit->numBlocks] = memberBlock;
+            (trackCircuit->numBlocks)++;
+        }
+        // TODO: report to the user if they have referenced a non-existing block
+    }
+}
+
 /*
  * Takes a pointer to a CRUST message and the length of the message and returns the detected opcode. If there is an input
  * to go with the operation, fills operationInput. See CRUST_MIXED_OPERATION_INPUT for details. If the opcode is not
@@ -90,6 +117,11 @@ CRUST_OPCODE crust_interpret_message(char * message, unsigned int length, CRUST_
                     crust_block_init(&operationInput->block, state);
                     crust_interpret_block(message, operationInput->block, state);
                     return INSERT_BLOCK;
+
+                case 'C':
+                    crust_track_circuit_init(&operationInput->trackCircuit, state);
+                    crust_interpret_track_circuit(message, operationInput->trackCircuit, state);
+                    return INSERT_TRACK_CIRCUIT;
 
                 default:
                     return NO_OPERATION;

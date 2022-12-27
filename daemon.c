@@ -237,6 +237,28 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
             }
             break;
 
+        case INSERT_TRACK_CIRCUIT:
+            crust_terminal_print_verbose("OPCODE: Insert track circuit");
+            switch(crust_track_circuit_insert(operationInput->trackCircuit, state))
+            {
+                case 0:
+                    crust_terminal_print_verbose("Track circuit inserted successfully.");
+                    break;
+
+                case 1:
+                    crust_terminal_print_verbose("Failed to insert track circuit - no blocks");
+                    free(operationInput->trackCircuit->blocks);
+                    free(operationInput->trackCircuit);
+                    break;
+
+                case 2:
+                    crust_terminal_print_verbose("Failed to insert track circuit - blocks already part of a different track circuit");
+                    free(operationInput->trackCircuit->blocks);
+                    free(operationInput->trackCircuit);
+                    break;
+            }
+            break;
+
             // Resend the entire state to the user
         case RESEND_STATE:
             crust_terminal_print_verbose("OPCODE: Resend State");
