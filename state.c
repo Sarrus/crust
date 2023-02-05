@@ -188,3 +188,15 @@ bool crust_track_circuit_get(unsigned int trackCircuitId, CRUST_TRACK_CIRCUIT **
         return false;
     }
 }
+
+// Sets the occupation state of a track circuit. Returns true if the occupation has changed, false otherwise.
+bool crust_track_circuit_set_occupation(CRUST_TRACK_CIRCUIT * trackCircuit, bool occupied, CRUST_STATE * state)
+{
+    if(trackCircuit->occupied == occupied)
+    {
+        return false;
+    }
+
+    trackCircuit->occupied = occupied;
+    return true;
+}

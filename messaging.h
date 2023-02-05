@@ -22,7 +22,9 @@ enum crustOpcode {
 #endif
     INSERT_BLOCK,
     INSERT_TRACK_CIRCUIT,
-    START_LISTENING
+    START_LISTENING,
+    CLEAR_TRACK_CIRCUIT,
+    OCCUPY_TRACK_CIRCUIT
 };
 
 struct crustInputBuffer {
@@ -40,6 +42,7 @@ union crustMixedOperationInput
 {
     CRUST_BLOCK * block;
     CRUST_TRACK_CIRCUIT * trackCircuit;
+    CRUST_IDENTIFIER identifier;
 };
 
 CRUST_OPCODE crust_interpret_message(char * message, unsigned int length, CRUST_MIXED_OPERATION_INPUT * operationInput, CRUST_STATE * state);

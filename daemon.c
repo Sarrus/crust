@@ -207,6 +207,7 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
                                 struct pollfd * pollList, CRUST_BUFFER_LIST_ENTRY * bufferList, int listPosition, int listLength)
 {
     CRUST_WRITE * write;
+    CRUST_TRACK_CIRCUIT * identifiedTrackCircuit;
 
     // Process the user's operation
     switch(opcode)
@@ -291,6 +292,30 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
             write->targets = 0;
             crust_write_queue_insert(pollList, bufferList, listPosition, write);
             bufferList[listPosition].listening = true;
+            break;
+
+        case CLEAR_TRACK_CIRCUIT:
+            crust_terminal_print_verbose("OPCODE: Clear Track Circuit");
+            if(crust_track_circuit_get(operationInput->identifier, &identifiedTrackCircuit, state)
+               && crust_track_circuit_set_occupation(identifiedTrackCircuit, false, state))
+            {
+                write = malloc(sizeof(CRUST_WRITE));
+                write->targets = 0;
+                write->bufferLength = crust_print_track_circuit(identifiedTrackCircuit, &write->writeBuffer);
+                crust_write_to_listeners(pollList, bufferList, listLength, write);
+            }
+            break;
+
+        case OCCUPY_TRACK_CIRCUIT:
+            crust_terminal_print_verbose("OPCODE: Occupy Track Circuit");
+            if(crust_track_circuit_get(operationInput->identifier, &identifiedTrackCircuit, state)
+               && crust_track_circuit_set_occupation(identifiedTrackCircuit, true, state))
+            {
+                write = malloc(sizeof(CRUST_WRITE));
+                write->targets = 0;
+                write->bufferLength = crust_print_track_circuit(identifiedTrackCircuit, &write->writeBuffer);
+                crust_write_to_listeners(pollList, bufferList, listLength, write);
+            }
             break;
 
             // Do nothing

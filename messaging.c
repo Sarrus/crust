@@ -121,6 +121,23 @@ void crust_interpret_track_circuit(char * message, CRUST_TRACK_CIRCUIT * trackCi
     }
 }
 
+void crust_interpret_identifier(char * message, CRUST_IDENTIFIER * identifier)
+{
+    errno = 0;
+    char * conversionStopPoint = &message[2];
+    unsigned long long readValue = strtoull(&message[2], &conversionStopPoint, 10);
+    printf("%i\r\n", errno);
+    if(!errno
+       && readValue <= UINT32_MAX)
+    {
+        *identifier = readValue;
+    }
+    else
+    {
+        *identifier = UINT32_MAX;
+    }
+}
+
 /*
  * Takes a pointer to a CRUST message and the length of the message and returns the detected opcode. If there is an input
  * to go with the operation, fills operationInput. See CRUST_MIXED_OPERATION_INPUT for details. If the opcode is not
@@ -136,6 +153,18 @@ CRUST_OPCODE crust_interpret_message(char * message, unsigned int length, CRUST_
 
     switch(message[0])
     {
+        case 'C':
+            switch(message[1])
+            {
+                case 'C':
+                    crust_interpret_identifier(message, &operationInput->identifier);
+                    return CLEAR_TRACK_CIRCUIT;
+
+                default:
+                    return NO_OPERATION;
+            }
+            break;
+
         case 'I':
             switch(message[1])
             {
@@ -152,6 +181,14 @@ CRUST_OPCODE crust_interpret_message(char * message, unsigned int length, CRUST_
 
                 default:
                     return NO_OPERATION;
+            }
+
+        case 'O':
+            switch(message[1])
+            {
+                case 'C':
+                    crust_interpret_identifier(message, &operationInput->identifier);
+                    return OCCUPY_TRACK_CIRCUIT;
             }
 
         case 'R':
@@ -226,7 +263,7 @@ size_t crust_print_track_circuit(CRUST_TRACK_CIRCUIT * trackCircuit, char ** out
     }
     else
     {
-        crust_dynamic_print_buffer_cat(&dynamicBuffer, "CL\r\n");
+        crust_dynamic_print_buffer_cat(&dynamicBuffer, "CL;\r\n");
     }
 
     *outBuffer = dynamicBuffer->buffer;

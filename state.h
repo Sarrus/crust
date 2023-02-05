@@ -7,6 +7,7 @@
 #define CRUST_TRACK_CIRCUIT struct crustTrackCircuit
 #define CRUST_STATE struct crustState
 #define CRUST_LINK_TYPE enum crustLinkType
+#define CRUST_IDENTIFIER u_int32_t
 #define CRUST_MAX_LINKS 4
 
 enum crustLinkType {
@@ -22,15 +23,15 @@ enum crustLinkType {
  * 10 digits
  */
 struct crustBlock {
-    u_int32_t blockId;
+    CRUST_IDENTIFIER blockId;
     CRUST_BLOCK * links[CRUST_MAX_LINKS];
     CRUST_TRACK_CIRCUIT * trackCircuit;
 };
 
 struct crustTrackCircuit {
-    u_int32_t trackCircuitId;
+    CRUST_IDENTIFIER trackCircuitId;
     CRUST_BLOCK ** blocks;
-    u_int32_t numBlocks;
+    CRUST_IDENTIFIER numBlocks;
     bool occupied;
 };
 
@@ -51,5 +52,6 @@ void crust_block_init(CRUST_BLOCK ** block, CRUST_STATE * state);
 void crust_track_circuit_init(CRUST_TRACK_CIRCUIT ** trackCircuit, CRUST_STATE * state);
 int crust_block_insert(CRUST_BLOCK * block, CRUST_STATE * state);
 int crust_track_circuit_insert(CRUST_TRACK_CIRCUIT * trackCircuit, CRUST_STATE * state);
+bool crust_track_circuit_set_occupation(CRUST_TRACK_CIRCUIT * trackCircuit, bool occupied, CRUST_STATE * state);
 
 #endif //CRUST_STATE_H
