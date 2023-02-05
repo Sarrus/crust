@@ -339,15 +339,15 @@ _Noreturn void crust_daemon_loop(CRUST_STATE * state)
                 // Proceed if we have space to buffer the bytes
                 if(bufferSpaceRemaining)
                 {
-                    // Read bytes up to the maximum we can accept
-                    size_t readBytes = read(pollList[i].fd, &bufferList[i].inputBuffer.buffer[bufferList[i].inputBuffer.writePointer], bufferSpaceRemaining);
+                    // Read one byte at a time
+                    size_t readBytes = read(pollList[i].fd, &bufferList[i].inputBuffer.buffer[bufferList[i].inputBuffer.writePointer], 1);
 
                     // Set the write pointer to the start of the remaining free space
                     bufferList[i].inputBuffer.writePointer += readBytes;
 
-                    // If there are bytes in the buffer and the user has sent a CR or LF at the end then process the buffer
-                    if(bufferList[i].inputBuffer.writePointer > 0
-                        && (bufferList[i].inputBuffer.buffer[bufferList[i].inputBuffer.writePointer - 1] == '\r'
+                    // If there are bytes in the buffer and the user has sent a CRLF at the end then process the buffer
+                    if(bufferList[i].inputBuffer.writePointer > 1
+                        && (bufferList[i].inputBuffer.buffer[bufferList[i].inputBuffer.writePointer - 2] == '\r'
                             || bufferList[i].inputBuffer.buffer[bufferList[i].inputBuffer.writePointer - 1] == '\n'))
                     {
                         // Interpret the message from the user, splitting it into an opcode and optionally some input
