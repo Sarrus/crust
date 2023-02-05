@@ -28,6 +28,33 @@ const char * crustLinkDesignations[] = {
         [downBranching] = "DB"
 };
 
+void crust_dynamic_print_buffer_init(CRUST_DYNAMIC_PRINT_BUFFER ** dynamicPrintBuffer)
+{
+    *dynamicPrintBuffer = malloc(sizeof(CRUST_DYNAMIC_PRINT_BUFFER));
+    (*dynamicPrintBuffer)->pointer = 0;
+    (*dynamicPrintBuffer)->size = CRUST_PRINT_BUFFER_SIZE_INCREMENT;
+    (*dynamicPrintBuffer)->buffer = malloc(sizeof(char) * (*dynamicPrintBuffer)->size);
+}
+
+void crust_dynamic_print_buffer_cat(CRUST_DYNAMIC_PRINT_BUFFER ** dst, char * src)
+{
+    size_t srcLength = strlen(src);
+    // If there is less free space in the buffer than the length of the message then resize the buffer
+    if(((*dst)->size - (*dst)->pointer) < srcLength)
+    {
+        (*dst)->size += CRUST_PRINT_BUFFER_SIZE_INCREMENT;
+        (*dst)->buffer = realloc((*dst)->buffer, (*dst)->size);
+        if((*dst)->buffer == NULL)
+        {
+            crust_terminal_print("Memory allocation failure when resizing print buffer");
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    memcpy((*dst)->buffer + (*dst)->pointer, src, srcLength);
+    (*dst)->pointer += srcLength;
+}
+
 /*
  * Takes a text based description of a block and a pointer to an empty block then fills the empty block based on the description.
  * The block may then be inserted into the CRUST state with crust_block_insert().
@@ -179,13 +206,13 @@ size_t crust_print_block(CRUST_BLOCK * block, char * printBuffer) // printBuffer
 
 /*
  * Creates a buffer containing the entire state as text, ready to be sent to listeners. A pointer to the text is placed
- * in dynamicPrintBuffer and the length of the text is returned.
+ * in outBuffer and the length of the text is returned.
  */
-unsigned long crust_print_state(CRUST_STATE * state, char ** dynamicPrintBuffer)
+unsigned long crust_print_state(CRUST_STATE * state, char ** outBuffer)
 {
-    *dynamicPrintBuffer = NULL;
-    unsigned long printBufferSize = 0;
-    unsigned long printPointer = 0;
+    CRUST_DYNAMIC_PRINT_BUFFER * dynamicBuffer;
+    crust_dynamic_print_buffer_init(&dynamicBuffer);
+
     char lineBuffer[CRUST_MAX_MESSAGE_LENGTH];
 
     // Look up every block in the index one by one
@@ -193,24 +220,14 @@ unsigned long crust_print_state(CRUST_STATE * state, char ** dynamicPrintBuffer)
     unsigned int blockToPrintId = 0;
     while(crust_block_get(blockToPrintId, &blockToPrint, state))
     {
-        // If there is less free space in the buffer than the maximum size of a message then resize the buffer
-        if((printBufferSize - printPointer) < CRUST_MAX_MESSAGE_LENGTH)
-        {
-            printBufferSize += CRUST_PRINT_BUFFER_SIZE_INCREMENT;
-            *dynamicPrintBuffer = realloc(*dynamicPrintBuffer, printBufferSize);
-            if(*dynamicPrintBuffer == NULL)
-            {
-                crust_terminal_print("Memory allocation failure when resizing print buffer");
-                exit(EXIT_FAILURE);
-            }
-        }
-
         // Fill the line buffer with the details of the block, then add the line buffer to the end of the print buffer.
-        size_t linePrintLength = crust_print_block(blockToPrint, lineBuffer);
-        memcpy(*dynamicPrintBuffer + printPointer, lineBuffer, linePrintLength);
-        printPointer += linePrintLength;
+        crust_print_block(blockToPrint, lineBuffer);
+        crust_dynamic_print_buffer_cat(&dynamicBuffer, lineBuffer);
         blockToPrintId++;
     }
 
-    return printPointer;
+    *outBuffer = dynamicBuffer->buffer;
+    size_t finalLength = dynamicBuffer->pointer;
+    free(dynamicBuffer);
+    return finalLength;
 }
