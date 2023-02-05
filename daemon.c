@@ -243,6 +243,10 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
             {
                 case 0:
                     crust_terminal_print_verbose("Track circuit inserted successfully.");
+                    write = malloc(sizeof(CRUST_WRITE));
+                    write->targets = 0;
+                    write->bufferLength = crust_print_track_circuit(operationInput->trackCircuit, &write->writeBuffer);
+                    crust_write_to_listeners(pollList, bufferList, listLength, write);
                     break;
 
                 case 1:

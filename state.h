@@ -46,6 +46,7 @@ struct crustState {
 
 void crust_state_init(CRUST_STATE ** state);
 bool crust_block_get(unsigned int blockId, CRUST_BLOCK ** block, CRUST_STATE * state);
+bool crust_track_circuit_get(unsigned int trackCircuitId, CRUST_TRACK_CIRCUIT ** trackCircuit, CRUST_STATE * state);
 void crust_block_init(CRUST_BLOCK ** block, CRUST_STATE * state);
 void crust_track_circuit_init(CRUST_TRACK_CIRCUIT ** trackCircuit, CRUST_STATE * state);
 int crust_block_insert(CRUST_BLOCK * block, CRUST_STATE * state);

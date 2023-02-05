@@ -44,6 +44,7 @@ union crustMixedOperationInput
 
 CRUST_OPCODE crust_interpret_message(char * message, unsigned int length, CRUST_MIXED_OPERATION_INPUT * operationInput, CRUST_STATE * state);
 size_t crust_print_block(CRUST_BLOCK * block, char * printBuffer);
+size_t crust_print_track_circuit(CRUST_TRACK_CIRCUIT * trackCircuit, char ** outBuffer);
 unsigned long crust_print_state(CRUST_STATE * state, char ** outBuffer);
 
 #endif //CRUST_MESSAGING_H

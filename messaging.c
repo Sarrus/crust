@@ -204,6 +204,37 @@ size_t crust_print_block(CRUST_BLOCK * block, char * printBuffer) // printBuffer
     return strlen(printBuffer);
 }
 
+size_t crust_print_track_circuit(CRUST_TRACK_CIRCUIT * trackCircuit, char ** outBuffer)
+{
+    CRUST_DYNAMIC_PRINT_BUFFER * dynamicBuffer;
+    crust_dynamic_print_buffer_init(&dynamicBuffer);
+
+    char chunkBuffer[CRUST_MAX_MESSAGE_LENGTH];
+
+    sprintf(chunkBuffer, "TS%i;", trackCircuit->trackCircuitId);
+    crust_dynamic_print_buffer_cat(&dynamicBuffer, chunkBuffer);
+
+    for(u_int32_t i = 0; i < trackCircuit->numBlocks; i++)
+    {
+        sprintf(chunkBuffer, "BL%i;", trackCircuit->blocks[i]->blockId);
+        crust_dynamic_print_buffer_cat(&dynamicBuffer, chunkBuffer);
+    }
+
+    if(trackCircuit->occupied)
+    {
+        crust_dynamic_print_buffer_cat(&dynamicBuffer, "OC;\r\n");
+    }
+    else
+    {
+        crust_dynamic_print_buffer_cat(&dynamicBuffer, "CL\r\n");
+    }
+
+    *outBuffer = dynamicBuffer->buffer;
+    size_t finalLength = dynamicBuffer->pointer;
+    free(dynamicBuffer);
+    return finalLength;
+}
+
 /*
  * Creates a buffer containing the entire state as text, ready to be sent to listeners. A pointer to the text is placed
  * in outBuffer and the length of the text is returned.
@@ -214,6 +245,7 @@ unsigned long crust_print_state(CRUST_STATE * state, char ** outBuffer)
     crust_dynamic_print_buffer_init(&dynamicBuffer);
 
     char lineBuffer[CRUST_MAX_MESSAGE_LENGTH];
+    char * subDynamicBuffer;
 
     // Look up every block in the index one by one
     CRUST_BLOCK * blockToPrint;
@@ -224,6 +256,17 @@ unsigned long crust_print_state(CRUST_STATE * state, char ** outBuffer)
         crust_print_block(blockToPrint, lineBuffer);
         crust_dynamic_print_buffer_cat(&dynamicBuffer, lineBuffer);
         blockToPrintId++;
+    }
+
+    // Do the same with track circuits
+    CRUST_TRACK_CIRCUIT * trackCircuitToPrint;
+    unsigned int trackCircuitToPrintId = 0;
+    while(crust_track_circuit_get(trackCircuitToPrintId, &trackCircuitToPrint, state))
+    {
+        crust_print_track_circuit(trackCircuitToPrint, &subDynamicBuffer);
+        crust_dynamic_print_buffer_cat(&dynamicBuffer, subDynamicBuffer);
+        free(subDynamicBuffer);
+        trackCircuitToPrintId++;
     }
 
     *outBuffer = dynamicBuffer->buffer;

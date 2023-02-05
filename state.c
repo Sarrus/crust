@@ -175,3 +175,16 @@ bool crust_block_get(unsigned int blockId, CRUST_BLOCK ** block, CRUST_STATE * s
         return false;
     }
 }
+
+bool crust_track_circuit_get(unsigned int trackCircuitId, CRUST_TRACK_CIRCUIT ** trackCircuit, CRUST_STATE * state)
+{
+    if(trackCircuitId < state->trackCircuitIndexPointer)
+    {
+        *trackCircuit = state->trackCircuitIndex[trackCircuitId];
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
