@@ -38,7 +38,7 @@ void crust_dynamic_print_buffer_init(CRUST_DYNAMIC_PRINT_BUFFER ** dynamicPrintB
 
 void crust_dynamic_print_buffer_cat(CRUST_DYNAMIC_PRINT_BUFFER ** dst, char * src)
 {
-    size_t srcLength = strlen(src);
+    size_t srcLength = strlen(src) + 1; // Include the null terminator in the length
     // If there is less free space in the buffer than the length of the message then resize the buffer
     if(((*dst)->size - (*dst)->pointer) < srcLength)
     {
@@ -52,7 +52,7 @@ void crust_dynamic_print_buffer_cat(CRUST_DYNAMIC_PRINT_BUFFER ** dst, char * sr
     }
 
     memcpy((*dst)->buffer + (*dst)->pointer, src, srcLength);
-    (*dst)->pointer += srcLength;
+    (*dst)->pointer += srcLength - 1; // Overwrite the null terminator
 }
 
 /*
