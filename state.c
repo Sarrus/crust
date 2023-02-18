@@ -53,6 +53,8 @@ void crust_block_init(CRUST_BLOCK ** block, CRUST_STATE * state)
     {
         (*block)->links[i] = NULL;
     }
+
+    (*block)->trackCircuit = NULL;
 }
 
 void crust_track_circuit_index_add(CRUST_TRACK_CIRCUIT * trackCircuit, CRUST_STATE * state)
