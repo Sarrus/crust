@@ -16,7 +16,7 @@
 enum crustRunMode {
     CLI,
     DAEMON,
-    WATCHER
+    NODE
 };
 
 bool crustOptionVerbose;

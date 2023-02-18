@@ -26,7 +26,7 @@
 #include "daemon.h"
 #include "options.h"
 #include "terminal.h"
-#include "watcher.h"
+#include "node.h"
 #ifdef MACOS
 #include <uuid/uuid.h>
 #endif
@@ -52,7 +52,7 @@ int main(int argc, char ** argv) {
 
     opterr = true;
     int option;
-    while((option = getopt(argc, argv, "dg:hr:u:vw:")) != -1)
+    while((option = getopt(argc, argv, "dg:hn:r:u:v")) != -1)
     {
         switch(option)
         {
@@ -79,11 +79,18 @@ int main(int argc, char ** argv) {
                                      "group on the CRUST run directory. "
                                      "(Defaults to the primary group of the user specified by -u.)");
                 crust_terminal_print("  -h  Display this help.");
+                crust_terminal_print("  -n  Run in node mode. Takes the path to a GPIO chip as an argument.");
                 crust_terminal_print("  -r  Specify the run directory used to hold the CRUST socket. ");
                 crust_terminal_print("  -u  Switch to this user after completing setup. "
                                      "(Only works if starting as root.)");
                 crust_terminal_print("  -v  Display verbose output.");
                 exit(EXIT_SUCCESS);
+
+            case 'n':
+                crustOptionRunMode = NODE;
+                strncpy(crustOptionGPIOPath, optarg, PATH_MAX - 1);
+                crustOptionGPIOPath[PATH_MAX - 1] = '\0';
+                break;
 
             case 'r':
                 strncpy(crustOptionRunDirectory, optarg, PATH_MAX);
@@ -117,12 +124,6 @@ int main(int argc, char ** argv) {
                 crustOptionVerbose = true;
                 break;
 
-            case 'w':
-                crustOptionRunMode = WATCHER;
-                strncpy(crustOptionGPIOPath, optarg, PATH_MAX - 1);
-                crustOptionGPIOPath[PATH_MAX - 1] = '\0';
-                break;
-
             case '?':
             default:
                 exit(EXIT_FAILURE);
@@ -138,8 +139,8 @@ int main(int argc, char ** argv) {
         case DAEMON:
             crust_daemon_run();
 
-        case WATCHER:
-            crust_watcher_run();
+        case NODE:
+            crust_node_run();
     }
 
     return EXIT_SUCCESS;

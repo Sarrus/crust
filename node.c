@@ -1,11 +1,11 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/stat.h>
-#include "watcher.h"
+#include "node.h"
 #include "terminal.h"
 #include "options.h"
 
-_Noreturn void crust_watcher_loop()
+_Noreturn void crust_node_loop()
 {
     for(;;)
     {
@@ -13,7 +13,7 @@ _Noreturn void crust_watcher_loop()
     }
 }
 
-_Noreturn void crust_watcher_run()
+_Noreturn void crust_node_run()
 {
     crust_terminal_print_verbose("CRUST watcher starting...");
 
@@ -49,5 +49,5 @@ _Noreturn void crust_watcher_run()
         crust_terminal_print("Unable to set the permission bits on the GPIO device, continuing");
     }
 
-    crust_watcher_loop();
+    crust_node_loop();
 }
