@@ -1,9 +1,39 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#include <gpiod.h>
+#include <signal.h>
 #include "node.h"
 #include "terminal.h"
 #include "options.h"
+
+#define GPIO_CHIP struct gpiod_chip
+
+GPIO_CHIP * gpioChip;
+
+_Noreturn void crust_node_stop()
+{
+    crust_terminal_print_verbose("Closing the GPIO connection...");
+    gpiod_chip_close(gpioChip);
+
+    exit(EXIT_SUCCESS);
+}
+
+void crust_node_handle_signal(int signal)
+{
+    switch(signal)
+    {
+        case SIGINT:
+            crust_terminal_print_verbose("Received SIGINT, shutting down...");
+            crust_node_stop();
+        case SIGTERM:
+            crust_terminal_print_verbose("Received SIGTERM, shutting down...");
+            crust_node_stop();
+        default:
+            crust_terminal_print("Received an unexpected signal, exiting.");
+            exit(EXIT_FAILURE);
+    }
+}
 
 _Noreturn void crust_node_loop()
 {
@@ -15,7 +45,22 @@ _Noreturn void crust_node_loop()
 
 _Noreturn void crust_node_run()
 {
-    crust_terminal_print_verbose("CRUST watcher starting...");
+    crust_terminal_print_verbose("CRUST node starting...");
+
+    crust_terminal_print_verbose("Binding to GPIO chip...");
+
+    gpioChip = NULL;
+    gpioChip = gpiod_chip_open(crustOptionGPIOPath);
+
+    if(gpioChip == NULL)
+    {
+        crust_terminal_print("Unable to open GPIO chip");
+        exit(EXIT_FAILURE);
+    }
+
+    // Registering signal handlers
+    signal(SIGINT, crust_node_handle_signal);
+    signal(SIGTERM, crust_node_handle_signal);
 
     if(crustOptionSetGroup)
     {

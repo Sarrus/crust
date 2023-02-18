@@ -26,7 +26,9 @@
 #include "daemon.h"
 #include "options.h"
 #include "terminal.h"
+#ifdef GPIO
 #include "node.h"
+#endif
 #ifdef MACOS
 #include <uuid/uuid.h>
 #endif
@@ -87,9 +89,14 @@ int main(int argc, char ** argv) {
                 exit(EXIT_SUCCESS);
 
             case 'n':
+#ifdef GPIO
                 crustOptionRunMode = NODE;
                 strncpy(crustOptionGPIOPath, optarg, PATH_MAX - 1);
                 crustOptionGPIOPath[PATH_MAX - 1] = '\0';
+#else
+                crust_terminal_print("CRUST only supports node mode when compiled with WITH_GPIO set.");
+                exit(EXIT_FAILURE);
+#endif
                 break;
 
             case 'r':
@@ -139,8 +146,10 @@ int main(int argc, char ** argv) {
         case DAEMON:
             crust_daemon_run();
 
+#ifdef GPIO
         case NODE:
             crust_node_run();
+#endif
     }
 
     return EXIT_SUCCESS;

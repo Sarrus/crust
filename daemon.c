@@ -49,7 +49,7 @@ _Noreturn void crust_daemon_stop()
     exit(EXIT_SUCCESS);
 }
 
-void crust_handle_signal(int signal)
+void crust_daemon_handle_signal(int signal)
 {
     switch(signal)
     {
@@ -580,8 +580,8 @@ _Noreturn void crust_daemon_run()
     umask(lastUmask);
 
     // Register the signal handlers
-    signal(SIGINT, crust_handle_signal);
-    signal(SIGTERM, crust_handle_signal);
+    signal(SIGINT, crust_daemon_handle_signal);
+    signal(SIGTERM, crust_daemon_handle_signal);
 
     // Make the socket non-blocking
     if(fcntl(socketFp, F_SETFD, fcntl(socketFp, F_GETFD) | O_NONBLOCK) == -1)

@@ -11,4 +11,10 @@ if(DEFINED WITH_TESTING)
     add_compile_definitions(TESTING)
 endif()
 
-add_executable(crust main.c daemon.c daemon.h options.h terminal.c terminal.h state.c state.h messaging.c messaging.h node.c node.h)
+add_executable(crust main.c daemon.c daemon.h options.h terminal.c terminal.h state.c state.h messaging.c messaging.h)
+
+if(DEFINED WITH_GPIO)
+    add_compile_definitions(GPIO)
+    target_sources(crust PRIVATE node.c node.h)
+    target_link_libraries(crust gpiod)
+endif()
