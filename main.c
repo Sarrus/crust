@@ -23,6 +23,7 @@
 #include <grp.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <errno.h>
 #include "daemon.h"
 #include "options.h"
 #include "terminal.h"
@@ -33,28 +34,81 @@
 #include <uuid/uuid.h>
 #endif
 
+bool crustOptionVerbose = false;
+enum crustRunMode crustOptionRunMode = CLI;
+char crustOptionRunDirectory[PATH_MAX];
+char crustOptionSocketPath[PATH_MAX];
+bool crustOptionSetUser = false;
+uid_t crustOptionTargetUser;
+bool crustOptionSetGroup = false;
+gid_t crustOptionTargetGroup;
+
+#ifdef GPIO
+
+char crustOptionGPIOPath[PATH_MAX];
+CRUST_GPIO_PIN_MAP * crustOptionPinMapStart;
+
+CRUST_GPIO_PIN_MAP * crustParsePinMap(char * mapText)
+{
+    char * start, * next, * current, * subNext;
+    start = next = current = subNext = mapText;
+    while((current = subNext = strsep(&next, ",")) != NULL)
+    {
+        if((current = strsep(&subNext, ":")) == NULL
+            || *current == '\0'
+            || subNext == NULL
+            || *subNext == '\0')
+        {
+            crust_terminal_print("Invalid track circuit GPIO map");
+            exit(EXIT_FAILURE);
+        }
+
+        char * endPointer;
+        errno = 0;
+        unsigned long pinNumber = strtoul(current, &endPointer, 10);
+        if(errno
+            || pinNumber > UINT_MAX)
+        {
+            crust_terminal_print("Invalid track circuit GPIO map");
+            exit(EXIT_FAILURE);
+        }
+        unsigned long trackCircuitNumber = strtoul(subNext, &endPointer, 10);
+        if(errno
+           || trackCircuitNumber > UINT_MAX)
+        {
+            crust_terminal_print("Invalid track circuit GPIO map");
+            exit(EXIT_FAILURE);
+        }
+
+        printf("%lu %lu\r\n", pinNumber, trackCircuitNumber);
+    }
+
+    return NULL;
+}
+#endif
+
 int main(int argc, char ** argv) {
 #ifdef TESTING
     crust_terminal_print("WARNING: CRUST has been compiled with -DWITH_TESTING. This compile option enables insecure "
                          "functionality and should NEVER be used in production. Stay safe out there.");
 #endif
 
-    crustOptionVerbose = false;
-    crustOptionRunMode = CLI;
     strncpy(crustOptionRunDirectory, CRUST_RUN_DIRECTORY, PATH_MAX);
     strncpy(crustOptionSocketPath, CRUST_RUN_DIRECTORY, PATH_MAX);
     strncat(crustOptionSocketPath, CRUST_SOCKET_NAME, PATH_MAX - strlen(crustOptionSocketPath) - 1);
-    crustOptionSetUser = false;
     crustOptionTargetUser = getuid();
-    crustOptionSetGroup = false;
     crustOptionTargetGroup = getgid();
+
+#ifdef GPIO
+    crustOptionPinMapStart = NULL;
+#endif
 
     struct passwd * userInfo = NULL;
     struct group * groupInfo = NULL;
 
     opterr = true;
     int option;
-    while((option = getopt(argc, argv, "dg:hn:r:u:v")) != -1)
+    while((option = getopt(argc, argv, "dg:hm:n:r:u:v")) != -1)
     {
         switch(option)
         {
@@ -81,12 +135,20 @@ int main(int argc, char ** argv) {
                                      "group on the CRUST run directory. "
                                      "(Defaults to the primary group of the user specified by -u.)");
                 crust_terminal_print("  -h  Display this help.");
+                crust_terminal_print("  -m  Specify track circuit to GPIO mapping in the format "
+                                     "pin_number:circuit_number,[...]");
                 crust_terminal_print("  -n  Run in node mode. Takes the path to a GPIO chip as an argument.");
                 crust_terminal_print("  -r  Specify the run directory used to hold the CRUST socket. ");
                 crust_terminal_print("  -u  Switch to this user after completing setup. "
                                      "(Only works if starting as root.)");
                 crust_terminal_print("  -v  Display verbose output.");
                 exit(EXIT_SUCCESS);
+
+            case 'm':
+#ifdef GPIO
+                crustParsePinMap(optarg);
+#endif
+                break;
 
             case 'n':
 #ifdef GPIO

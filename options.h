@@ -2,6 +2,7 @@
 #define CRUST_OPTIONS_H
 #include <stdbool.h>
 #include <sys/types.h>
+#include "state.h"
 #ifdef MACOS
 #include <sys/syslimits.h>
 #else
@@ -19,14 +20,24 @@ enum crustRunMode {
     NODE
 };
 
-bool crustOptionVerbose;
-enum crustRunMode crustOptionRunMode;
-char crustOptionRunDirectory[PATH_MAX];
-char crustOptionSocketPath[PATH_MAX];
-char crustOptionGPIOPath[PATH_MAX];
-bool crustOptionSetUser;
-uid_t crustOptionTargetUser;
-bool crustOptionSetGroup;
-gid_t crustOptionTargetGroup;
+extern bool crustOptionVerbose;
+extern enum crustRunMode crustOptionRunMode;
+extern char crustOptionRunDirectory[PATH_MAX];
+extern char crustOptionSocketPath[PATH_MAX];
+extern bool crustOptionSetUser;
+extern uid_t crustOptionTargetUser;
+extern bool crustOptionSetGroup;
+extern gid_t crustOptionTargetGroup;
+
+#ifdef GPIO
+#define CRUST_GPIO_PIN_MAP struct crustGPIOPinMap
+struct crustGPIOPinMap {
+    unsigned int pinID;
+    CRUST_IDENTIFIER trackCircuitID;
+    CRUST_GPIO_PIN_MAP * next;
+};
+extern char crustOptionGPIOPath[PATH_MAX];
+extern CRUST_GPIO_PIN_MAP * crustOptionPinMapStart;
+#endif
 
 #endif //CRUST_OPTIONS_H
