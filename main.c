@@ -48,8 +48,10 @@ gid_t crustOptionTargetGroup;
 char crustOptionGPIOPath[PATH_MAX];
 CRUST_GPIO_PIN_MAP * crustOptionPinMapStart = NULL;
 
-CRUST_GPIO_PIN_MAP * crustParsePinMap(char * mapText)
+void crustParsePinMap(char * mapText, CRUST_GPIO_PIN_MAP ** pinMap)
 {
+    CRUST_GPIO_PIN_MAP ** pinMapNextEntry = pinMap;
+
     char * next, * current, * subNext;
     next = mapText;
     while((current = subNext = strsep(&next, ",")) != NULL)
@@ -79,10 +81,12 @@ CRUST_GPIO_PIN_MAP * crustParsePinMap(char * mapText)
             exit(EXIT_FAILURE);
         }
 
-        printf("%lu %lu\r\n", pinNumber, trackCircuitNumber);
+        *pinMapNextEntry = malloc(sizeof(CRUST_GPIO_PIN_MAP));
+        (*pinMapNextEntry)->pinID = pinNumber;
+        (*pinMapNextEntry)->trackCircuitID = trackCircuitNumber;
+        (*pinMapNextEntry)->next = NULL;
+        pinMapNextEntry = &(*pinMapNextEntry)->next;
     }
-
-    return NULL;
 }
 #endif
 
@@ -145,7 +149,7 @@ int main(int argc, char ** argv) {
 
             case 'm':
 #ifdef GPIO
-                crustParsePinMap(optarg);
+                crustParsePinMap(optarg, &crustOptionPinMapStart);
 #endif
                 break;
 
