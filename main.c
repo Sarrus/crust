@@ -46,12 +46,12 @@ gid_t crustOptionTargetGroup;
 #ifdef GPIO
 
 char crustOptionGPIOPath[PATH_MAX];
-CRUST_GPIO_PIN_MAP * crustOptionPinMapStart;
+CRUST_GPIO_PIN_MAP * crustOptionPinMapStart = NULL;
 
 CRUST_GPIO_PIN_MAP * crustParsePinMap(char * mapText)
 {
-    char * start, * next, * current, * subNext;
-    start = next = current = subNext = mapText;
+    char * next, * current, * subNext;
+    next = mapText;
     while((current = subNext = strsep(&next, ",")) != NULL)
     {
         if((current = strsep(&subNext, ":")) == NULL
@@ -63,16 +63,15 @@ CRUST_GPIO_PIN_MAP * crustParsePinMap(char * mapText)
             exit(EXIT_FAILURE);
         }
 
-        char * endPointer;
         errno = 0;
-        unsigned long pinNumber = strtoul(current, &endPointer, 10);
+        unsigned long pinNumber = strtoul(current, NULL, 10);
         if(errno
             || pinNumber > UINT_MAX)
         {
             crust_terminal_print("Invalid track circuit GPIO map");
             exit(EXIT_FAILURE);
         }
-        unsigned long trackCircuitNumber = strtoul(subNext, &endPointer, 10);
+        unsigned long trackCircuitNumber = strtoul(subNext, NULL, 10);
         if(errno
            || trackCircuitNumber > UINT_MAX)
         {
