@@ -44,50 +44,8 @@ bool crustOptionSetGroup = false;
 gid_t crustOptionTargetGroup;
 
 #ifdef GPIO
-
 char crustOptionGPIOPath[PATH_MAX];
-CRUST_GPIO_PIN_MAP * crustOptionPinMapStart = NULL;
-
-void crustParsePinMap(char * mapText, CRUST_GPIO_PIN_MAP ** pinMap)
-{
-    CRUST_GPIO_PIN_MAP ** pinMapNextEntry = pinMap;
-
-    char * next, * current, * subNext;
-    next = mapText;
-    while((current = subNext = strsep(&next, ",")) != NULL)
-    {
-        if((current = strsep(&subNext, ":")) == NULL
-            || *current == '\0'
-            || subNext == NULL
-            || *subNext == '\0')
-        {
-            crust_terminal_print("Invalid track circuit GPIO map");
-            exit(EXIT_FAILURE);
-        }
-
-        errno = 0;
-        unsigned long pinNumber = strtoul(current, NULL, 10);
-        if(errno
-            || pinNumber > UINT_MAX)
-        {
-            crust_terminal_print("Invalid track circuit GPIO map");
-            exit(EXIT_FAILURE);
-        }
-        unsigned long trackCircuitNumber = strtoul(subNext, NULL, 10);
-        if(errno
-           || trackCircuitNumber > UINT_MAX)
-        {
-            crust_terminal_print("Invalid track circuit GPIO map");
-            exit(EXIT_FAILURE);
-        }
-
-        *pinMapNextEntry = malloc(sizeof(CRUST_GPIO_PIN_MAP));
-        (*pinMapNextEntry)->pinID = pinNumber;
-        (*pinMapNextEntry)->trackCircuitID = trackCircuitNumber;
-        (*pinMapNextEntry)->next = NULL;
-        pinMapNextEntry = &(*pinMapNextEntry)->next;
-    }
-}
+char * crustOptionPinMapString = NULL;
 #endif
 
 int main(int argc, char ** argv) {
@@ -101,10 +59,6 @@ int main(int argc, char ** argv) {
     strncat(crustOptionSocketPath, CRUST_SOCKET_NAME, PATH_MAX - strlen(crustOptionSocketPath) - 1);
     crustOptionTargetUser = getuid();
     crustOptionTargetGroup = getgid();
-
-#ifdef GPIO
-    crustOptionPinMapStart = NULL;
-#endif
 
     struct passwd * userInfo = NULL;
     struct group * groupInfo = NULL;
@@ -149,7 +103,7 @@ int main(int argc, char ** argv) {
 
             case 'm':
 #ifdef GPIO
-                crustParsePinMap(optarg, &crustOptionPinMapStart);
+                crustOptionPinMapString = optarg;
 #endif
                 break;
 

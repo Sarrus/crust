@@ -30,14 +30,8 @@ extern bool crustOptionSetGroup;
 extern gid_t crustOptionTargetGroup;
 
 #ifdef GPIO
-#define CRUST_GPIO_PIN_MAP struct crustGPIOPinMap
-struct crustGPIOPinMap {
-    unsigned int pinID;
-    CRUST_IDENTIFIER trackCircuitID;
-    CRUST_GPIO_PIN_MAP * next;
-};
 extern char crustOptionGPIOPath[PATH_MAX];
-extern CRUST_GPIO_PIN_MAP * crustOptionPinMapStart;
+extern char * crustOptionPinMapString;
 #endif
 
 #endif //CRUST_OPTIONS_H

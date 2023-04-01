@@ -3,13 +3,64 @@
 #include <sys/stat.h>
 #include <gpiod.h>
 #include <signal.h>
+#include <string.h>
+#include <errno.h>
+#include <poll.h>
+#include <stdio.h>
 #include "node.h"
 #include "terminal.h"
 #include "options.h"
 
 #define GPIO_CHIP struct gpiod_chip
 
+#define CRUST_GPIO_PIN_MAP struct crustGPIOPinMap
+struct crustGPIOPinMap {
+    unsigned int pinID;
+    CRUST_IDENTIFIER trackCircuitID;
+};
+
 GPIO_CHIP * gpioChip;
+
+void crust_generate_pin_map_and_poll_list(char * mapText, int * listLength, CRUST_GPIO_PIN_MAP ** pinMap, struct pollfd ** pollList)
+{
+    *listLength = 0;
+    *pinMap = NULL;
+
+    char * next, * current, * subNext;
+    next = mapText;
+    while((current = subNext = strsep(&next, ",")) != NULL)
+    {
+        if((current = strsep(&subNext, ":")) == NULL
+           || *current == '\0'
+           || subNext == NULL
+           || *subNext == '\0')
+        {
+            crust_terminal_print("Invalid track circuit GPIO map");
+            exit(EXIT_FAILURE);
+        }
+
+        errno = 0;
+        unsigned long pinNumber = strtoul(current, NULL, 10);
+        if(errno
+           || pinNumber > UINT_MAX)
+        {
+            crust_terminal_print("Invalid track circuit GPIO map");
+            exit(EXIT_FAILURE);
+        }
+        unsigned long trackCircuitNumber = strtoul(subNext, NULL, 10);
+        if(errno
+           || trackCircuitNumber > UINT_MAX)
+        {
+            crust_terminal_print("Invalid track circuit GPIO map");
+            exit(EXIT_FAILURE);
+        }
+
+        (*listLength)++;
+        *pinMap = realloc(*pinMap, (sizeof(CRUST_GPIO_PIN_MAP) * *listLength));
+        pinMap[0][*listLength - 1].pinID = pinNumber;
+        pinMap[0][*listLength - 1].trackCircuitID = trackCircuitNumber;
+    }
+}
 
 _Noreturn void crust_node_stop()
 {
@@ -93,6 +144,17 @@ _Noreturn void crust_node_run()
     {
         crust_terminal_print("Unable to set the permission bits on the GPIO device, continuing");
     }
+
+    int listLength;
+    CRUST_GPIO_PIN_MAP * pinMap;
+    struct pollfd * pollList;
+
+    crust_generate_pin_map_and_poll_list(crustOptionPinMapString, &listLength, &pinMap, &pollList);
+
+    // Get the lines as objects
+    // Reserve and set to input gpiod_line_request_input
+    // Request events gpiod_line_request_bulk_both_edges_events
+    // Setup a poll of the lines gpiod_line_event_get_fd gpiod_line_event_read_fd
 
     crust_node_loop();
 }
