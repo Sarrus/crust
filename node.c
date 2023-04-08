@@ -17,6 +17,7 @@
 struct crustGPIOPinMap {
     unsigned int pinID;
     CRUST_IDENTIFIER trackCircuitID;
+    struct gpiod_line * gpioLine;
 };
 
 GPIO_CHIP * gpioChip;
@@ -25,6 +26,7 @@ void crust_generate_pin_map_and_poll_list(char * mapText, int * listLength, CRUS
 {
     *listLength = 0;
     *pinMap = NULL;
+    *pollList = NULL;
 
     char * next, * current, * subNext;
     next = mapText;
@@ -56,10 +58,13 @@ void crust_generate_pin_map_and_poll_list(char * mapText, int * listLength, CRUS
         }
 
         (*listLength)++;
+
         *pinMap = realloc(*pinMap, (sizeof(CRUST_GPIO_PIN_MAP) * *listLength));
         pinMap[0][*listLength - 1].pinID = pinNumber;
         pinMap[0][*listLength - 1].trackCircuitID = trackCircuitNumber;
     }
+
+    *pollList = malloc(sizeof(struct pollfd) * *listLength);
 }
 
 _Noreturn void crust_node_stop()
@@ -86,11 +91,28 @@ void crust_node_handle_signal(int signal)
     }
 }
 
-_Noreturn void crust_node_loop()
+_Noreturn void crust_node_loop(int listLength, CRUST_GPIO_PIN_MAP * pinMap, struct pollfd * pollList)
 {
     for(;;)
     {
-        sleep(1);
+        struct gpiod_line_event event;
+        poll(pollList, listLength, -1);
+        for(int i = 0; i < listLength; i++)
+        {
+            if(pollList[i].revents)
+            {
+                gpiod_line_event_read_fd(pollList[i].fd, &event);
+                printf("Track circuit %i ", pinMap[i].trackCircuitID);
+                if(event.event_type == GPIOD_LINE_EVENT_FALLING_EDGE)
+                {
+                    printf("LOW\r\n");
+                }
+                else if(event.event_type == GPIOD_LINE_EVENT_RISING_EDGE)
+                {
+                    printf("HIGH\r\n");
+                }
+            }
+        }
     }
 }
 
@@ -151,10 +173,30 @@ _Noreturn void crust_node_run()
 
     crust_generate_pin_map_and_poll_list(crustOptionPinMapString, &listLength, &pinMap, &pollList);
 
-    // Get the lines as objects
-    // Reserve and set to input gpiod_line_request_input
-    // Request events gpiod_line_request_bulk_both_edges_events
-    // Setup a poll of the lines gpiod_line_event_get_fd gpiod_line_event_read_fd
+    for(int i = 0; i < listLength; i++)
+    {
+        pinMap[i].gpioLine = gpiod_chip_get_line(gpioChip, pinMap[i].pinID);
+        if(pinMap[i].gpioLine == NULL)
+        {
+            crust_terminal_print("Failed to open a GPIO line");
+            exit(EXIT_FAILURE);
+        }
 
-    crust_node_loop();
+        if(gpiod_line_request_both_edges_events(pinMap[i].gpioLine, NULL))
+        {
+            crust_terminal_print("Failed to register for events on a GPIO line");
+            exit(EXIT_FAILURE);
+        }
+
+        pollList[i].fd = gpiod_line_event_get_fd(pinMap[i].gpioLine);
+        if(pollList[i].fd < 0)
+        {
+            crust_terminal_print("Failed to obtain file descriptor for a GPIO line");
+            exit(EXIT_FAILURE);
+        }
+
+        pollList[i].events = POLLIN;
+    }
+
+    crust_node_loop(listLength, pinMap, pollList);
 }
