@@ -24,6 +24,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <errno.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #include "daemon.h"
 #include "options.h"
 #include "terminal.h"
@@ -42,6 +44,8 @@ bool crustOptionSetUser = false;
 uid_t crustOptionTargetUser;
 bool crustOptionSetGroup = false;
 gid_t crustOptionTargetGroup;
+in_port_t crustOptionPort = CRUST_DEFAULT_PORT;
+in_addr_t crustOptionIPAddress = CRUST_DEFAULT_IP_ADDRESS;
 
 #ifdef GPIO
 char crustOptionGPIOPath[PATH_MAX];
@@ -63,12 +67,25 @@ int main(int argc, char ** argv) {
     struct passwd * userInfo = NULL;
     struct group * groupInfo = NULL;
 
+    unsigned long prospectivePort = 0;
+    struct in_addr prospectiveIPAddress;
+    char * endPointer;
+
     opterr = true;
     int option;
-    while((option = getopt(argc, argv, "dg:hm:n:r:u:v")) != -1)
+    while((option = getopt(argc, argv, "a:dg:hm:n:p:r:u:v")) != -1)
     {
         switch(option)
         {
+            case 'a':
+                if(!inet_aton(optarg, &prospectiveIPAddress))
+                {
+                    crust_terminal_print("Invalid IP address specified");
+                    exit(EXIT_FAILURE);
+                }
+                crustOptionIPAddress = prospectiveIPAddress.s_addr;
+                break;
+
             case 'd':
                 crustOptionRunMode = DAEMON;
                 break;
@@ -87,6 +104,7 @@ int main(int argc, char ** argv) {
             case 'h':
                 crust_terminal_print("CRUST: Consolidated Realtime Updates on Status of Trains");
                 crust_terminal_print("Usage: crust [options]");
+                crust_terminal_print("  -a  IP address of the CRUST server (defaults to 127.0.0.1)");
                 crust_terminal_print("  -d  Run in daemon mode.");
                 crust_terminal_print("  -g  Switch to this group after completing setup (if run as root) and set this "
                                      "group on the CRUST run directory. "
@@ -95,6 +113,7 @@ int main(int argc, char ** argv) {
                 crust_terminal_print("  -m  Specify track circuit to GPIO mapping in the format "
                                      "pin_number:circuit_number,[...]");
                 crust_terminal_print("  -n  Run in node mode. Takes the path to a GPIO chip as an argument.");
+                crust_terminal_print("  -p  Port of the CRUST server (defaults to 12321)");
                 crust_terminal_print("  -r  Specify the run directory used to hold the CRUST socket. ");
                 crust_terminal_print("  -u  Switch to this user after completing setup. "
                                      "(Only works if starting as root.)");
@@ -116,6 +135,20 @@ int main(int argc, char ** argv) {
                 crust_terminal_print("CRUST only supports node mode when compiled with WITH_GPIO set.");
                 exit(EXIT_FAILURE);
 #endif
+                break;
+
+            case 'p':
+                endPointer = optarg;
+                prospectivePort = strtoul(optarg, &endPointer, 10);
+                if(*optarg == '\0'
+                    || *endPointer != '\0'
+                    || prospectivePort > 65535
+                    || !prospectivePort)
+                {
+                    crust_terminal_print("Invalid port specified");
+                    exit(EXIT_FAILURE);
+                }
+                crustOptionPort = (in_port_t)prospectivePort;
                 break;
 
             case 'r':
