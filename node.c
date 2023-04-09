@@ -95,7 +95,7 @@ void crust_node_handle_signal(int signal)
     }
 }
 
-_Noreturn void crust_node_loop(int listLength, CRUST_GPIO_PIN_MAP * pinMap, struct pollfd * pollList)
+_Noreturn void crust_node_loop(int listLength, CRUST_GPIO_PIN_MAP * pinMap, struct pollfd * pollList, int socketFD)
 {
     for(;;)
     {
@@ -106,14 +106,13 @@ _Noreturn void crust_node_loop(int listLength, CRUST_GPIO_PIN_MAP * pinMap, stru
             if(pollList[i].revents)
             {
                 gpiod_line_event_read_fd(pollList[i].fd, &event);
-                printf("Track circuit %i ", pinMap[i].trackCircuitID);
                 if(event.event_type == GPIOD_LINE_EVENT_FALLING_EDGE)
                 {
-                    printf("LOW\r\n");
+                    dprintf(socketFD, "CC;%i;\r\n", pinMap[i].trackCircuitID);
                 }
                 else if(event.event_type == GPIOD_LINE_EVENT_RISING_EDGE)
                 {
-                    printf("HIGH\r\n");
+                    dprintf(socketFD, "OC;%i;\r\n", pinMap[i].trackCircuitID);
                 }
             }
         }
@@ -226,5 +225,5 @@ _Noreturn void crust_node_run()
     // Retry if the connection fails
     // Reconnect on hangup
 
-    crust_node_loop(listLength, pinMap, pollList);
+    crust_node_loop(listLength, pinMap, pollList, socketFD);
 }
