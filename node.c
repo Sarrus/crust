@@ -208,6 +208,7 @@ _Noreturn void crust_node_run()
         exit(EXIT_FAILURE);
     }
 
+    crust_terminal_print_verbose("Connecting to CRUST server...");
     struct sockaddr_in serverAddress;
     memset(&serverAddress, '\0', sizeof(struct sockaddr_in));
     serverAddress.sin_family = AF_INET;
@@ -218,6 +219,7 @@ _Noreturn void crust_node_run()
         crust_terminal_print("Error connecting to CRUST server.");
         exit(EXIT_FAILURE);
     }
+    crust_terminal_print_verbose("Connected to CRUST server.");
 
     // Create a socket
     // Configure the socket address
