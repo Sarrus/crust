@@ -28,7 +28,7 @@ GPIO_CHIP * gpioChip;
 
 void crust_generate_pin_map_and_poll_list(char * mapText, int * listLength, CRUST_GPIO_PIN_MAP ** pinMap, struct pollfd ** pollList)
 {
-    *listLength = 0;
+    *listLength = 1; // Start at length 1 to leave an empty space for the socket
     *pinMap = NULL;
     *pollList = NULL;
 
@@ -95,24 +95,35 @@ void crust_node_handle_signal(int signal)
     }
 }
 
-_Noreturn void crust_node_loop(int listLength, CRUST_GPIO_PIN_MAP * pinMap, struct pollfd * pollList, int socketFD)
+_Noreturn void crust_node_loop(int listLength, CRUST_GPIO_PIN_MAP * pinMap, struct pollfd * pollList)
 {
+    // pollList[0].fd is the socket connected to the server
     for(;;)
     {
         struct gpiod_line_event event;
         poll(pollList, listLength, -1);
-        for(int i = 0; i < listLength; i++)
+        if(pollList[0].revents & POLLHUP)
+        {
+            crust_terminal_print_verbose("CRUST server disconnected.");
+            crust_node_stop();
+        }
+        if((pollList[0].revents & POLLRDNORM) && !read(pollList[0].fd, NULL, 1))
+        {
+            crust_terminal_print_verbose("CRUST server closing connection.");
+            shutdown(pollList[0].fd, SHUT_RDWR);
+        }
+        for(int i = 1; i < listLength; i++)
         {
             if(pollList[i].revents)
             {
                 gpiod_line_event_read_fd(pollList[i].fd, &event);
                 if(event.event_type == GPIOD_LINE_EVENT_FALLING_EDGE)
                 {
-                    dprintf(socketFD, "CC;%i;\r\n", pinMap[i].trackCircuitID);
+                    dprintf(pollList[0].fd, "CC;%i;\r\n", pinMap[i].trackCircuitID);
                 }
                 else if(event.event_type == GPIOD_LINE_EVENT_RISING_EDGE)
                 {
-                    dprintf(socketFD, "OC;%i;\r\n", pinMap[i].trackCircuitID);
+                    dprintf(pollList[0].fd, "OC;%i;\r\n", pinMap[i].trackCircuitID);
                 }
             }
         }
@@ -176,7 +187,7 @@ _Noreturn void crust_node_run()
 
     crust_generate_pin_map_and_poll_list(crustOptionPinMapString, &listLength, &pinMap, &pollList);
 
-    for(int i = 0; i < listLength; i++)
+    for(int i = 1; i < listLength; i++)
     {
         pinMap[i].gpioLine = gpiod_chip_get_line(gpioChip, pinMap[i].pinID);
         if(pinMap[i].gpioLine == NULL)
@@ -208,6 +219,10 @@ _Noreturn void crust_node_run()
         exit(EXIT_FAILURE);
     }
 
+    // Put the server socket in entry 0 on the poll list
+    pollList[0].fd = socketFD;
+    pollList[0].events = POLLRDNORM;
+
     crust_terminal_print_verbose("Connecting to CRUST server...");
     struct sockaddr_in serverAddress;
     memset(&serverAddress, '\0', sizeof(struct sockaddr_in));
@@ -227,5 +242,5 @@ _Noreturn void crust_node_run()
     // Retry if the connection fails
     // Reconnect on hangup
 
-    crust_node_loop(listLength, pinMap, pollList, socketFD);
+    crust_node_loop(listLength, pinMap, pollList);
 }
