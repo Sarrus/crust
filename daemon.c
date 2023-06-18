@@ -43,9 +43,6 @@ _Noreturn void crust_daemon_stop()
     crust_terminal_print_verbose("Closing the CRUST socket...");
     close(socketFp);
 
-    crust_terminal_print_verbose("Removing the CRUST socket from the VFS...");
-    unlink(crustOptionSocketPath);
-
     exit(EXIT_SUCCESS);
 }
 
@@ -371,6 +368,12 @@ _Noreturn void crust_daemon_loop(CRUST_STATE * state)
                     // Read one byte at a time
                     size_t readBytes = read(pollList[i].fd, &bufferList[i].inputBuffer.buffer[bufferList[i].inputBuffer.writePointer], 1);
 
+                    // If we get 0 bytes (EOF), it means that the other end is closing the connection, we should do the same
+                    if(!readBytes)
+                    {
+                        shutdown(pollList[i].fd, SHUT_RDWR);
+                    }
+
                     // Set the write pointer to the start of the remaining free space
                     bufferList[i].inputBuffer.writePointer += readBytes;
 
@@ -476,33 +479,6 @@ _Noreturn void crust_daemon_run()
 {
     crust_terminal_print_verbose("CRUST daemon starting...");
 
-    crust_terminal_print_verbose("Removing previous CRUST socket...");
-    if((unlink(crustOptionSocketPath) == -1) && (errno != ENOENT))
-    {
-        crust_terminal_print("Unable to remove previous CRUST socket");
-        exit(EXIT_FAILURE);
-    }
-
-    crust_terminal_print_verbose("Removing previous CRUST run directory...");
-    if((rmdir(crustOptionRunDirectory) == -1) && (errno != ENOENT))
-    {
-        crust_terminal_print("Unable to remove previous CRUST run directory");
-        exit(EXIT_FAILURE);
-    }
-
-    crust_terminal_print_verbose("Creating CRUST run directory...");
-    if(mkdir(crustOptionRunDirectory, S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH) && (errno != EEXIST))
-    {
-        crust_terminal_print("Unable to create CRUST run directory");
-        exit(EXIT_FAILURE);
-    }
-
-    if(chown(crustOptionRunDirectory, crustOptionTargetUser, crustOptionTargetGroup))
-    {
-        crust_terminal_print("Unable to set owner of CRUST run directory");
-        exit(EXIT_FAILURE);
-    }
-
     if(crustOptionSetGroup)
     {
         crust_terminal_print_verbose("Attempting to set process GID...");
@@ -510,6 +486,43 @@ _Noreturn void crust_daemon_run()
         {
             crust_terminal_print("Unable to set process GID, continuing with default");
         }
+    }
+
+    crust_terminal_print_verbose("Creating CRUST socket...");
+
+    // Request a socket from the kernel
+    socketFp = socket(PF_INET, SOCK_STREAM, 0);
+    if(socketFp == -1)
+    {
+        crust_terminal_print("Failed to create CRUST socket.");
+        exit(EXIT_FAILURE);
+    }
+
+    // Declare a structure to hold the socket address
+    struct sockaddr_in address;
+
+    // Empty the structure
+    memset(&address, '\0', sizeof(struct sockaddr_in));
+
+    // Fill the structure
+    address.sin_family = AF_INET;
+    address.sin_port = htons(crustOptionPort);
+    address.sin_addr.s_addr = crustOptionIPAddress;
+#ifdef MACOS
+    address.sin_len = sizeof(struct sockaddr_in);
+#endif
+
+    // Bind to the interface
+    if(bind(socketFp, (struct sockaddr *) &address, sizeof(address)) == -1)
+    {
+        if(errno == EACCES)
+        {
+            crust_terminal_print("Unable to bind to interface - permission denied. ");
+            exit(EXIT_FAILURE);
+        }
+
+        crust_terminal_print("Failed to bind to interface.");
+        exit(EXIT_FAILURE);
     }
 
     if(crustOptionSetUser)
@@ -521,63 +534,6 @@ _Noreturn void crust_daemon_run()
             exit(EXIT_FAILURE);
         }
     }
-
-    crust_terminal_print_verbose("Creating CRUST socket...");
-
-    // Request a socket from the kernel
-    socketFp = socket(PF_LOCAL, SOCK_STREAM, 0);
-    if(socketFp == -1)
-    {
-        crust_terminal_print("Failed to create CRUST socket.");
-        exit(EXIT_FAILURE);
-    }
-
-    // Declare a structure to hold the socket address
-    struct sockaddr * socketAddress;
-
-    // Measure the socket address length
-    unsigned long addrLength =
-#ifdef MACOS
-            sizeof(socketAddress->sa_len) +
-#endif
-            sizeof(socketAddress->sa_family) +
-            strlen(crustOptionSocketPath);
-
-    // Allocate the memory
-    socketAddress = malloc(addrLength);
-
-    // Empty the structure
-    memset(socketAddress, '\0', addrLength);
-
-    // Fill the structure
-#ifdef MACOS
-    socketAddress->sa_len = addrLength;
-#endif
-    socketAddress->sa_family = AF_LOCAL;
-    strcpy(socketAddress->sa_data, crustOptionSocketPath);
-
-    // Set the umask
-    mode_t lastUmask = umask(CRUST_DEFAULT_SOCKET_UMASK);
-
-    // Bind to the VFS
-    if(bind(socketFp, socketAddress, addrLength) == -1)
-    {
-        if(errno == EACCES)
-        {
-            crust_terminal_print("Unable to create CRUST socket - permission denied. Please ensure that the process "
-                                 "can write to the socket directory.");
-            exit(EXIT_FAILURE);
-        }
-
-        crust_terminal_print("Failed to bind CRUST socket to the VFS.");
-        exit(EXIT_FAILURE);
-    }
-
-    // Free the memory used for the address
-    free(socketAddress);
-
-    // Pop the previous umask
-    umask(lastUmask);
 
     // Register the signal handlers
     signal(SIGINT, crust_daemon_handle_signal);

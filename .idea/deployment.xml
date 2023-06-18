@@ -14,6 +14,32 @@
           </excludedPaths>
         </serverdata>
       </paths>
+      <paths name="gwr-crust1 (6bb5794f-f4f3-45b3-9241-738009f972d5)">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/tmp/tmp.D0Kc15OK9R" local="$PROJECT_DIR$" />
+          </mappings>
+          <excludedPaths>
+            <excludedPath local="true" path="$PROJECT_DIR$/cmake-build-debug" />
+            <excludedPath local="true" path="$PROJECT_DIR$/cmake-build-debug-gwr-crust1" />
+            <excludedPath local="true" path="$PROJECT_DIR$/cmake-build-debug-crust1" />
+            <excludedPath local="true" path="$PROJECT_DIR$/cmake-build-release" />
+          </excludedPaths>
+        </serverdata>
+      </paths>
+      <paths name="gwr-crust2 (ddf655b0-6f1c-4363-a79f-135c12cc3660)">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/tmp/tmp.JnpeQlIksR" local="$PROJECT_DIR$" />
+          </mappings>
+          <excludedPaths>
+            <excludedPath local="true" path="$PROJECT_DIR$/cmake-build-debug-gwr-crust2" />
+            <excludedPath local="true" path="$PROJECT_DIR$/cmake-build-debug" />
+            <excludedPath local="true" path="$PROJECT_DIR$/cmake-build-debug-crust1" />
+            <excludedPath local="true" path="$PROJECT_DIR$/cmake-build-release" />
+          </excludedPaths>
+        </serverdata>
+      </paths>
     </serverData>
   </component>
 </project>
