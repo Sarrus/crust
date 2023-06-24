@@ -13,6 +13,9 @@
 #include "state.h"
 #include "options.h"
 #include "messaging.h"
+#ifdef SYSTEMD
+#include <systemd/sd-daemon.h>
+#endif
 #ifdef TESTING
 #include "tools/lipsum.h"
 #endif
@@ -40,6 +43,10 @@ struct crustBufferListEntry {
 
 _Noreturn void crust_daemon_stop()
 {
+#ifdef SYSTEMD
+    sd_notify(0, "STOPPING=1\n"
+                 "STATUS=CRUST Daemon shutting down...");
+#endif
     crust_terminal_print_verbose("Closing the CRUST socket...");
     close(socketFp);
 
@@ -478,6 +485,9 @@ _Noreturn void crust_daemon_loop(CRUST_STATE * state)
 _Noreturn void crust_daemon_run()
 {
     crust_terminal_print_verbose("CRUST daemon starting...");
+#ifdef SYSTEMD
+    sd_notify(0, "STATUS=CRUST Daemon starting up...");
+#endif
 
     if(crustOptionSetGroup)
     {
@@ -557,6 +567,11 @@ _Noreturn void crust_daemon_run()
         crust_terminal_print("Failed to enable listening on the CRUST socket.");
         exit(EXIT_FAILURE);
     }
+
+#ifdef SYSTEMD
+    sd_notify(0, "READY=1\n"
+                 "STATUS=CRUST Daemon running");
+#endif
 
     crust_daemon_loop(state);
 }

@@ -12,9 +12,18 @@ if(DEFINED WITH_TESTING)
 endif()
 
 add_executable(crust main.c daemon.c terminal.c state.c messaging.c)
+install(TARGETS crust)
 
 if(DEFINED WITH_GPIO)
     add_compile_definitions(GPIO)
     target_sources(crust PRIVATE node.c)
     target_link_libraries(crust gpiod)
 endif()
+
+if(DEFINED WITH_SYSTEMD)
+    add_compile_definitions(SYSTEMD)
+    target_link_libraries(crust systemd)
+    install(FILES ${}platforms/systemd/crust-daemon.service DESTINATION /usr/lib/systemd/system/)
+endif()
+
+

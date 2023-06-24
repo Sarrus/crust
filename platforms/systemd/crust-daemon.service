@@ -1,0 +1,10 @@
+[Unit]
+Description=Consolodated Realtime Updates on Status of Trains daemon
+After=multi-user.target network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/crust -du crust -g crust -a 0.0.0.0
+Type=notify
+
+[Install]
+WantedBy=multi-user.target
