@@ -1,0 +1,10 @@
+[Unit]
+Description=Consolodated Realtime Updates on Status of Trains node
+After=multi-user.target network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/crust -du crust -g crust -n /dev/gpiochip0 -a 192.168.2.1 -m 25:0,5:1,6:2,16:3,22:4,12:5,20:6,19:7,27:8,21:9,13:10,26:11
+Type=notify
+
+[Install]
+WantedBy=multi-user.target

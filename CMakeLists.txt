@@ -23,7 +23,8 @@ endif()
 if(DEFINED WITH_SYSTEMD)
     add_compile_definitions(SYSTEMD)
     target_link_libraries(crust systemd)
-    install(FILES ${}platforms/systemd/crust-daemon.service DESTINATION /usr/lib/systemd/system/)
+    install(FILES platforms/systemd/crust-daemon.service DESTINATION /usr/lib/systemd/system/)
+    install(FILES platforms/systemd/crust-node.service DESTINATION /usr/lib/systemd/system/)
 endif()
 
 

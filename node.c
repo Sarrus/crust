@@ -16,6 +16,9 @@
 #include "node.h"
 #include "terminal.h"
 #include "options.h"
+#ifdef SYSTEMD
+#include <systemd/sd-daemon.h>
+#endif
 
 /*
  * This is the time that a GPIO line has to stay in it's state before the appropriate track circuit is updated. This allows
@@ -84,6 +87,10 @@ void crust_generate_pin_map_and_poll_list(char * mapText, int * listLength, CRUS
 
 _Noreturn void crust_node_stop()
 {
+#ifdef SYSTEMD
+    sd_notify(0, "STOPPING=1\n"
+                 "STATUS=CRUST Node shutting down...");
+#endif
     crust_terminal_print_verbose("Closing the GPIO connection...");
     gpiod_chip_close(gpioChip);
 
@@ -291,6 +298,11 @@ _Noreturn void crust_node_run()
     // Connect the socket
     // Retry if the connection fails
     // Reconnect on hangup
+
+#ifdef SYSTEMD
+    sd_notify(0, "READY=1\n"
+                 "STATUS=CRUST Node running");
+#endif
 
     crust_node_loop(listLength, pinMap, pollList);
 }
