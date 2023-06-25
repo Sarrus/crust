@@ -233,12 +233,6 @@ _Noreturn void crust_node_run()
 
     for(int i = 1; i < listLength; i++)
     {
-        // Set to immediately trigger a state update when the loop starts
-        pinMap[i].lastOccupationRead = true;
-        pinMap[i].lastOccupationSent = false;
-        pinMap[i].lastReadAt.tv_nsec = 0;
-        pinMap[i].lastReadAt.tv_sec = 0;
-
         pinMap[i].gpioLine = gpiod_chip_get_line(gpioChip, pinMap[i].pinID);
         if(pinMap[i].gpioLine == NULL)
         {
@@ -251,6 +245,12 @@ _Noreturn void crust_node_run()
             crust_terminal_print("Failed to register for events on a GPIO line");
             exit(EXIT_FAILURE);
         }
+
+        // Set to immediately trigger a state update when the loop starts
+        pinMap[i].lastReadAt.tv_nsec = 0;
+        pinMap[i].lastReadAt.tv_sec = 0;
+        pinMap[i].lastOccupationRead = gpiod_line_get_value(pinMap[i].gpioLine);
+        pinMap[i].lastOccupationSent = !pinMap[i].lastOccupationRead;
 
         pollList[i].fd = gpiod_line_event_get_fd(pinMap[i].gpioLine);
         if(pollList[i].fd < 0)
