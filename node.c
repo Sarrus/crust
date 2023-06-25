@@ -11,9 +11,17 @@
 #include <netdb.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <stdbool.h>
+#include <time.h>
 #include "node.h"
 #include "terminal.h"
 #include "options.h"
+
+/*
+ * This is the time that a GPIO line has to stay in it's state before the appropriate track circuit is updated. This allows
+ * for some flickering of the circuit when it changes state and ignores brief spikes / troughs in voltage. Max 1000
+ * */
+#define CRUST_NODE_SETTLE_TIME 100 //ms
 
 #define GPIO_CHIP struct gpiod_chip
 
@@ -22,6 +30,9 @@ struct crustGPIOPinMap {
     unsigned int pinID;
     CRUST_IDENTIFIER trackCircuitID;
     struct gpiod_line * gpioLine;
+    bool lastOccupationRead; // The last occupation state read on the line (true = occupied, false = clear)
+    bool lastOccupationSent; // The last occupation state sent to the server
+    struct timespec lastReadAt; // The time the last read occurred
 };
 
 GPIO_CHIP * gpioChip;
@@ -97,11 +108,14 @@ void crust_node_handle_signal(int signal)
 
 _Noreturn void crust_node_loop(int listLength, CRUST_GPIO_PIN_MAP * pinMap, struct pollfd * pollList)
 {
+    struct timespec now;
+    int pollTimeout = 1; // Set the first poll to time out straight away
     // pollList[0].fd is the socket connected to the server
     for(;;)
     {
         struct gpiod_line_event event;
-        poll(pollList, listLength, -1);
+        poll(pollList, listLength, pollTimeout);
+        pollTimeout = -1; // Disable the timeout (then re-enable it below if required)
         if(pollList[0].revents & POLLHUP)
         {
             crust_terminal_print_verbose("CRUST server disconnected.");
@@ -112,6 +126,7 @@ _Noreturn void crust_node_loop(int listLength, CRUST_GPIO_PIN_MAP * pinMap, stru
             crust_terminal_print_verbose("CRUST server closing connection.");
             shutdown(pollList[0].fd, SHUT_RDWR);
         }
+        clock_gettime(CLOCK_MONOTONIC, &now);
         for(int i = 1; i < listLength; i++)
         {
             if(pollList[i].revents)
@@ -119,11 +134,40 @@ _Noreturn void crust_node_loop(int listLength, CRUST_GPIO_PIN_MAP * pinMap, stru
                 gpiod_line_event_read_fd(pollList[i].fd, &event);
                 if(event.event_type == GPIOD_LINE_EVENT_FALLING_EDGE)
                 {
-                    dprintf(pollList[0].fd, "CC;%i;\r\n", pinMap[i].trackCircuitID);
+                    pinMap[i].lastOccupationRead = false;
                 }
                 else if(event.event_type == GPIOD_LINE_EVENT_RISING_EDGE)
                 {
-                    dprintf(pollList[0].fd, "OC;%i;\r\n", pinMap[i].trackCircuitID);
+                    pinMap[i].lastOccupationRead = true;
+                }
+
+                pinMap[i].lastReadAt.tv_sec = now.tv_sec;
+                pinMap[i].lastReadAt.tv_nsec = now.tv_nsec;
+                pollTimeout = CRUST_NODE_SETTLE_TIME; // Set a poll timeout
+            }
+            else if(pinMap[i].lastOccupationRead != pinMap[i].lastOccupationSent)
+            {
+                // Calculate the time since the last read
+                struct timespec difference;
+                difference.tv_sec = now.tv_sec - pinMap[i].lastReadAt.tv_sec;
+                difference.tv_nsec = now.tv_nsec - pinMap[i].lastReadAt.tv_nsec;
+                if(difference.tv_nsec < 0)
+                {
+                    difference.tv_nsec += (long)1e9;
+                    difference.tv_sec--;
+                }
+
+                if(difference.tv_sec || (difference.tv_nsec > (CRUST_NODE_SETTLE_TIME * 1000)))
+                {
+                    if(pinMap[i].lastOccupationRead)
+                    {
+                        dprintf(pollList[0].fd, "OC;%i;\r\n", pinMap[i].trackCircuitID);
+                    }
+                    else
+                    {
+                        dprintf(pollList[0].fd, "CC;%i;\r\n", pinMap[i].trackCircuitID);
+                    }
+                    pinMap[i].lastOccupationSent = pinMap[i].lastOccupationRead;
                 }
             }
         }
@@ -189,6 +233,12 @@ _Noreturn void crust_node_run()
 
     for(int i = 1; i < listLength; i++)
     {
+        // Set to immediately trigger a state update when the loop starts
+        pinMap[i].lastOccupationRead = true;
+        pinMap[i].lastOccupationSent = false;
+        pinMap[i].lastReadAt.tv_nsec = 0;
+        pinMap[i].lastReadAt.tv_sec = 0;
+
         pinMap[i].gpioLine = gpiod_chip_get_line(gpioChip, pinMap[i].pinID);
         if(pinMap[i].gpioLine == NULL)
         {
