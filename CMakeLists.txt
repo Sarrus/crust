@@ -11,14 +11,9 @@ if(DEFINED WITH_TESTING)
     add_compile_definitions(TESTING)
 endif()
 
-add_executable(crust main.c daemon.c terminal.c state.c messaging.c)
-install(TARGETS crust)
+add_subdirectory(src)
 
-if(DEFINED WITH_GPIO)
-    add_compile_definitions(GPIO)
-    target_sources(crust PRIVATE node.c)
-    target_link_libraries(crust gpiod)
-endif()
+install(TARGETS crust)
 
 if(DEFINED WITH_SYSTEMD)
     add_compile_definitions(SYSTEMD)
