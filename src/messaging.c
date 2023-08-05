@@ -143,10 +143,10 @@ void crust_interpret_identifier(char * message, CRUST_IDENTIFIER * identifier)
  * to go with the operation, fills operationInput. See CRUST_MIXED_OPERATION_INPUT for details. If the opcode is not
  * recognised or there is an error, returns NO_OPERATION.
  */
-CRUST_OPCODE crust_interpret_message(char * message, unsigned int length, CRUST_MIXED_OPERATION_INPUT * operationInput, CRUST_STATE * state)
+CRUST_OPCODE crust_interpret_message(char * message, CRUST_MIXED_OPERATION_INPUT * operationInput, CRUST_STATE * state)
 {
     // Return NOP if the message is too short
-    if(length < 2)
+    if(strlen(message) < 2)
     {
         return NO_OPERATION;
     }

@@ -367,7 +367,7 @@ _Noreturn void crust_daemon_loop(CRUST_STATE * state)
             else if(pollList[i].revents & (POLLRDBAND | POLLRDNORM))
             {
                 // Calculate how many bytes we can read
-                unsigned int bufferSpaceRemaining = CRUST_MAX_MESSAGE_LENGTH - bufferList[i].inputBuffer.writePointer;
+                unsigned int bufferSpaceRemaining = CRUST_MAX_MESSAGE_LENGTH - bufferList[i].inputBuffer.writePointer - 1; // -1 to ensure there is always space for a null terminator
 
                 // Proceed if we have space to buffer the bytes
                 if(bufferSpaceRemaining)
@@ -389,10 +389,12 @@ _Noreturn void crust_daemon_loop(CRUST_STATE * state)
                         && (bufferList[i].inputBuffer.buffer[bufferList[i].inputBuffer.writePointer - 2] == '\r'
                             || bufferList[i].inputBuffer.buffer[bufferList[i].inputBuffer.writePointer - 1] == '\n'))
                     {
+                        // Terminate the buffer
+                        bufferList[i].inputBuffer.buffer[bufferList[i].inputBuffer.writePointer] = '\0';
+
                         // Interpret the message from the user, splitting it into an opcode and optionally some input
                         CRUST_MIXED_OPERATION_INPUT operationInput;
                         CRUST_OPCODE opcode = crust_interpret_message(bufferList[i].inputBuffer.buffer,
-                                                                      bufferList[i].inputBuffer.writePointer,
                                                                       &operationInput,
                                                                       state);
 
