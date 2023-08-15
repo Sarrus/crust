@@ -151,30 +151,43 @@ int crust_interpret_block(char * message, CRUST_BLOCK * block, CRUST_STATE * sta
     }
 }
 
-void crust_interpret_track_circuit(char * message, CRUST_TRACK_CIRCUIT * trackCircuit, CRUST_STATE * state)
+int crust_interpret_track_circuit(char * message, CRUST_TRACK_CIRCUIT * trackCircuit, CRUST_STATE * state)
 {
-    unsigned long long readValue;
-    char * conversionStopPoint;
-    CRUST_BLOCK * memberBlock;
-    char * segment;
-
-    // Go through each ; delimited part of the message
-    while((segment = strsep(&message, CRUST_DELIMITERS)) != NULL)
+    while(1)
     {
+        char *conversionStopPoint = "";
         errno = 0;
-        conversionStopPoint = segment;
-        readValue = strtoull(segment, &conversionStopPoint, 10);
-        // Check that:
-        if(!errno // There was no error
-           && *conversionStopPoint == '\0' // There was no data after the number
-           && readValue <= UINT32_MAX // The number isn't larger than tha maximum size of an index
-           && crust_block_get(readValue, &memberBlock, state)) // The referenced block exists
+        CRUST_BLOCK *memberBlock;
+        unsigned long long readValue = strtoull(message, &conversionStopPoint, 10);
+        if (!errno // There was no error
+            && conversionStopPoint != message // some numerals were read
+            && readValue <= UINT32_MAX // The number isn't larger than tha maximum size of a block index
+            && crust_block_get(readValue, &memberBlock, state)) // The referenced block exists
         {
             trackCircuit->blocks = realloc(trackCircuit->blocks, sizeof(CRUST_BLOCK *) * (trackCircuit->numBlocks + 1));
+            if (trackCircuit->blocks == NULL) {
+                crust_terminal_print("Memory allocation error");
+                exit(EXIT_FAILURE);
+            }
             trackCircuit->blocks[trackCircuit->numBlocks] = memberBlock;
             (trackCircuit->numBlocks)++;
         }
-        // TODO: report to the user if they have referenced a non-existing block
+        else
+        {
+            return 1;
+        }
+
+        if(*conversionStopPoint == '\0')
+        {
+            return 0;
+        }
+
+        if(*conversionStopPoint != '/')
+        {
+            return 1;
+        }
+
+        message = &conversionStopPoint[1];
     }
 }
 
@@ -238,7 +251,12 @@ CRUST_OPCODE crust_interpret_message(char * message, CRUST_MIXED_OPERATION_INPUT
 
                 case 'C':
                     crust_track_circuit_init(&operationInput->trackCircuit, state);
-                    crust_interpret_track_circuit(message, operationInput->trackCircuit, state);
+                    if(crust_interpret_track_circuit(&message[2], operationInput->trackCircuit, state))
+                    {
+                        crust_terminal_print_verbose("Invalid circuit member list");
+                        free(operationInput->trackCircuit);
+                        return NO_OPERATION;
+                    }
                     return INSERT_TRACK_CIRCUIT;
 
                 default:
