@@ -289,17 +289,17 @@ CRUST_OPCODE crust_interpret_message(char * message, CRUST_MIXED_OPERATION_INPUT
 size_t crust_print_block(CRUST_BLOCK * block, char * printBuffer) // printBuffer must point to
 {
     char partBuffer[CRUST_MAX_MESSAGE_LENGTH];
-    sprintf(printBuffer,"BL%i;", block->blockId);
+    sprintf(printBuffer,"BL%i", block->blockId);
     for(int i = 0; i < CRUST_MAX_LINKS; i++)
     {
         if(block->links[i] != NULL)
         {
-            sprintf(partBuffer, "%s%i;", crustLinkDesignations[i], block->links[i]->blockId);
+            sprintf(partBuffer, "%s%i", crustLinkDesignations[i], block->links[i]->blockId);
             strcat(printBuffer, partBuffer);
         }
     }
     // Current max length 58 bytes
-    strcat(printBuffer, "\r\n");
+    strcat(printBuffer, "\n");
     return strlen(printBuffer);
 }
 
