@@ -82,8 +82,8 @@ void crust_daemon_handle_signal(int signal)
  * CRUST only watches connections for writeability when it has some data to write. When there is no data to write, CRUST
  * stops polling the connection for writeability.
  *
- * The buffer pollList contains a read buffer for each connection. The read buffer is a chunk of memory that contains an operation
- * for CRUST to process. The user fills this buffer by writing to their connection. When they send either a CR or an LF, CRUST
+ * The buffer pollList contains a read buffer for each connection. The read buffer is a chunk of memory that contains an
+ * operation for CRUST to process. The user fills this buffer by writing to their connection. When they send an LF CRUST
  * executes the operation and resets the buffer.
  *
  * The buffer pollList also contains a queue of CRUST_WRITEs for the connection. While there are writes in the queue, CRUST will
@@ -363,7 +363,7 @@ _Noreturn void crust_daemon_loop(CRUST_STATE * state)
                 crust_terminal_print_verbose("Connection terminated.");
                 pollList[i].fd = -(pollList[i].fd);
             }
-            // Send some data if the socket is ready to be read
+            // Receive some data if the socket is ready to be read
             else if(pollList[i].revents & (POLLRDBAND | POLLRDNORM))
             {
                 // Calculate how many bytes we can read
@@ -426,7 +426,7 @@ _Noreturn void crust_daemon_loop(CRUST_STATE * state)
 
                     bufferList[i].currentWritePositionPointer += bytesWritten;
 
-                    // If the write suceedes completely, drop it from the queue and try the next entry
+                    // If the write succeeds completely, drop it from the queue and try the next entry
                     if(bufferList[i].currentWritePositionPointer == bufferList[i].writeQueue[bufferList[i].writeQueueService]->bufferLength)
                     {
                         (bufferList[i].writeQueue[bufferList[i].writeQueueService]->targets)--;
