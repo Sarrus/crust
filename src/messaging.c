@@ -328,22 +328,26 @@ size_t crust_print_track_circuit(CRUST_TRACK_CIRCUIT * trackCircuit, char ** out
 
     char chunkBuffer[CRUST_MAX_MESSAGE_LENGTH];
 
-    sprintf(chunkBuffer, "TS%i;", trackCircuit->trackCircuitId);
+    sprintf(chunkBuffer, "TC%i:", trackCircuit->trackCircuitId);
     crust_dynamic_print_buffer_cat(&dynamicBuffer, chunkBuffer);
 
     for(u_int32_t i = 0; i < trackCircuit->numBlocks; i++)
     {
-        sprintf(chunkBuffer, "BL%i;", trackCircuit->blocks[i]->blockId);
+        if(i)
+        {
+            crust_dynamic_print_buffer_cat(&dynamicBuffer, "/");
+        }
+        sprintf(chunkBuffer, "%i", trackCircuit->blocks[i]->blockId);
         crust_dynamic_print_buffer_cat(&dynamicBuffer, chunkBuffer);
     }
 
     if(trackCircuit->occupied)
     {
-        crust_dynamic_print_buffer_cat(&dynamicBuffer, "OC;\r\n");
+        crust_dynamic_print_buffer_cat(&dynamicBuffer, "OC\r\n");
     }
     else
     {
-        crust_dynamic_print_buffer_cat(&dynamicBuffer, "CL;\r\n");
+        crust_dynamic_print_buffer_cat(&dynamicBuffer, "CL\r\n");
     }
 
     *outBuffer = dynamicBuffer->buffer;
