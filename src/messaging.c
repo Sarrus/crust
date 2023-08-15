@@ -191,20 +191,22 @@ int crust_interpret_track_circuit(char * message, CRUST_TRACK_CIRCUIT * trackCir
     }
 }
 
-void crust_interpret_identifier(char * message, CRUST_IDENTIFIER * identifier)
+int crust_interpret_identifier(char * message, CRUST_IDENTIFIER * identifier)
 {
     errno = 0;
-    char * conversionStopPoint = &message[2];
-    unsigned long long readValue = strtoull(&message[2], &conversionStopPoint, 10);
-    printf("%i\r\n", errno);
-    if(!errno
-       && readValue <= UINT32_MAX)
+    char * conversionStopPoint = "";
+    unsigned long long readValue = strtoull(message, &conversionStopPoint, 10);
+    if(!errno // There was no error
+       && conversionStopPoint != message // Some numerals were read
+       && readValue <= UINT32_MAX // The value was less than the maximum
+       && *conversionStopPoint == '\0' ) // We read to the end
     {
         *identifier = readValue;
+        return 0;
     }
     else
     {
-        *identifier = UINT32_MAX;
+        return 1;
     }
 }
 
@@ -227,7 +229,11 @@ CRUST_OPCODE crust_interpret_message(char * message, CRUST_MIXED_OPERATION_INPUT
             switch(message[1])
             {
                 case 'C':
-                    crust_interpret_identifier(message, &operationInput->identifier);
+                    if(crust_interpret_identifier(&message[2], &operationInput->identifier))
+                    {
+                        crust_terminal_print_verbose("Invalid identifier");
+                        return NO_OPERATION;
+                    }
                     return CLEAR_TRACK_CIRCUIT;
 
                 default:
@@ -267,7 +273,11 @@ CRUST_OPCODE crust_interpret_message(char * message, CRUST_MIXED_OPERATION_INPUT
             switch(message[1])
             {
                 case 'C':
-                    crust_interpret_identifier(message, &operationInput->identifier);
+                    if(crust_interpret_identifier(&message[2], &operationInput->identifier))
+                    {
+                        crust_terminal_print_verbose("Invalid identifier");
+                        return NO_OPERATION;
+                    }
                     return OCCUPY_TRACK_CIRCUIT;
             }
 
