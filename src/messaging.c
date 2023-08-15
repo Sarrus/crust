@@ -57,40 +57,97 @@ void crust_dynamic_print_buffer_cat(CRUST_DYNAMIC_PRINT_BUFFER ** dst, char * sr
 
 /*
  * Takes a text based description of a block and a pointer to an empty block then fills the empty block based on the description.
- * The block may then be inserted into the CRUST state with crust_block_insert().
+ * The block may then be inserted into the CRUST state with crust_block_insert(). Returns 0 if the description is valid, otherwise
+ * returns 1
  */
-void crust_interpret_block(char * message, CRUST_BLOCK * block, CRUST_STATE * state)
+int crust_interpret_block(char * message, CRUST_BLOCK * block, CRUST_STATE * state)
 {
-    unsigned long long readValue;
-    char * conversionStopPoint;
-    CRUST_BLOCK * linkBlock;
-    char * segment;
+    bool linkSeen[4] = {false, false, false, false};
 
-    // Go through each ; delimited part of the message
-    while((segment = strsep(&message, CRUST_DELIMITERS)) != NULL)
+    while(1)
     {
-        // Check if the part begins with a link designation.
-        for(int i = 0; i < CRUST_MAX_LINKS; i++)
+        CRUST_LINK_TYPE linkType;
+
+        if(strlen(message) < 3)
         {
-            if(!strncmp(crustLinkDesignations[i], segment, CRUST_OPCODE_LENGTH))
-            {
-                // Try and convert the characters after the designation into an unsigned long long
-                errno = 0;
-                conversionStopPoint = &segment[2];
-                readValue = strtoull(&segment[2], &conversionStopPoint, 10);
-                // Check that:
-                if(!errno // There was no error
-                    && *conversionStopPoint == '\0' // There was no data after the number
-                    && readValue <= UINT32_MAX // The number isn't larger than tha maximum size of a block index
-                    && crust_block_get(readValue, &linkBlock, state)) // The referenced block exists
-                {
-                    // Link to the existing block
-                    block->links[i] = linkBlock;
-                    break;
-                }
-                // TODO: report to the user if they have referenced a non-existing block
-            }
+            return 1;
         }
+
+        // Figure out the link type the user has specified
+        switch(message[0])
+        {
+            case 'U':
+                switch(message[1])
+                {
+                    case 'M':
+                        linkType = upMain;
+                        break;
+
+                    case 'B':
+                        linkType = upBranching;
+                        break;
+
+                    default:
+                        return 1;
+                }
+                break;
+
+            case 'D':
+                switch(message[1])
+                {
+                    case 'M':
+                        linkType = downMain;
+                    break;
+
+                    case 'B':
+                        linkType = downBranching;
+                    break;
+
+                    default:
+                        return 1;
+                }
+                break;
+
+            default:
+                return 1;
+        }
+
+        if(linkSeen[linkType])
+        {
+            // same link specified twice
+            return 1;
+        }
+
+        linkSeen[linkType] = true;
+
+        // Skip past the link designation characters
+        message = &message[2];
+
+        char * conversionStopPoint = "";
+        errno = 0;
+        CRUST_BLOCK * linkBlock;
+        unsigned long long readValue = strtoull(message, &conversionStopPoint, 10);
+        // Check that:
+        if(!errno // There was no error
+            && conversionStopPoint != message // some numerals were read
+            && readValue <= UINT32_MAX // The number isn't larger than tha maximum size of a block index
+            && crust_block_get(readValue, &linkBlock, state)) // The referenced block exists
+        {
+            // Link to the existing block
+            block->links[linkType] = linkBlock;
+        }
+        else
+        {
+            return 1;
+        }
+
+        if(*conversionStopPoint == '\0')
+        {
+            return 0;
+        }
+
+        // Skip to the next designation
+        message = conversionStopPoint;
     }
 }
 
@@ -171,7 +228,12 @@ CRUST_OPCODE crust_interpret_message(char * message, CRUST_MIXED_OPERATION_INPUT
                 case 'B':
                     // Initialise a block and try to fill it.
                     crust_block_init(&operationInput->block, state);
-                    crust_interpret_block(message, operationInput->block, state);
+                    if(crust_interpret_block(&message[2], operationInput->block, state))
+                    {
+                        crust_terminal_print_verbose("Invalid block description message");
+                        free(operationInput->block);
+                        return NO_OPERATION;
+                    }
                     return INSERT_BLOCK;
 
                 case 'C':

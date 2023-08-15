@@ -384,13 +384,12 @@ _Noreturn void crust_daemon_loop(CRUST_STATE * state)
                     // Set the write pointer to the start of the remaining free space
                     bufferList[i].inputBuffer.writePointer += readBytes;
 
-                    // If there are bytes in the buffer and the user has sent a CRLF at the end then process the buffer
+                    // If there are bytes in the buffer and the user has sent a LF at the end then process the buffer
                     if(bufferList[i].inputBuffer.writePointer > 1
-                        && (bufferList[i].inputBuffer.buffer[bufferList[i].inputBuffer.writePointer - 2] == '\r'
-                            || bufferList[i].inputBuffer.buffer[bufferList[i].inputBuffer.writePointer - 1] == '\n'))
+                        && bufferList[i].inputBuffer.buffer[bufferList[i].inputBuffer.writePointer - 1] == '\n')
                     {
                         // Terminate the buffer
-                        bufferList[i].inputBuffer.buffer[bufferList[i].inputBuffer.writePointer] = '\0';
+                        bufferList[i].inputBuffer.buffer[bufferList[i].inputBuffer.writePointer -1 ] = '\0';
 
                         // Interpret the message from the user, splitting it into an opcode and optionally some input
                         CRUST_MIXED_OPERATION_INPUT operationInput;
