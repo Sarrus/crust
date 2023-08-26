@@ -20,7 +20,8 @@
 enum crustRunMode {
     CLI,
     DAEMON,
-    NODE
+    NODE,
+    WINDOW
 };
 
 extern bool crustOptionVerbose;

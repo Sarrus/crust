@@ -29,6 +29,7 @@
 #include "daemon.h"
 #include "options.h"
 #include "terminal.h"
+#include "window.h"
 #ifdef GPIO
 #include "node.h"
 #endif
@@ -73,7 +74,7 @@ int main(int argc, char ** argv) {
 
     opterr = true;
     int option;
-    while((option = getopt(argc, argv, "a:dg:hm:n:p:r:u:v")) != -1)
+    while((option = getopt(argc, argv, "a:dg:hm:n:p:r:u:vw")) != -1)
     {
         switch(option)
         {
@@ -118,6 +119,7 @@ int main(int argc, char ** argv) {
                 crust_terminal_print("  -u  Switch to this user after completing setup. "
                                      "(Only works if starting as root.)");
                 crust_terminal_print("  -v  Display verbose output.");
+                crust_terminal_print("  -w  Run in window mode. (Show a live view of the line.)");
                 exit(EXIT_SUCCESS);
 
             case 'm':
@@ -183,6 +185,10 @@ int main(int argc, char ** argv) {
                 crustOptionVerbose = true;
                 break;
 
+            case 'w':
+                crustOptionRunMode = WINDOW;
+                break;
+
             case '?':
             default:
                 exit(EXIT_FAILURE);
@@ -202,6 +208,9 @@ int main(int argc, char ** argv) {
         case NODE:
             crust_node_run();
 #endif
+
+        case WINDOW:
+            crust_window_run();
     }
 
     return EXIT_SUCCESS;
