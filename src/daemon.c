@@ -231,12 +231,29 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
                     break;
 
                 case 1:
-                    crust_terminal_print_verbose("Failed to insert block - no links");
+                    crust_terminal_print_verbose("Failed to insert block - name is not unique");
+                    if(operationInput->block->blockName != NULL)
+                    {
+                        free(operationInput->block->blockName);
+                    }
                     free(operationInput->block);
                     break;
 
                 case 2:
                     crust_terminal_print_verbose("Failed to insert block - conflicting link(s)");
+                    if(operationInput->block->blockName != NULL)
+                    {
+                        free(operationInput->block->blockName);
+                    }
+                    free(operationInput->block);
+                    break;
+
+                case 3:
+                    crust_terminal_print_verbose("Failed to insert block - no links");
+                    if(operationInput->block->blockName != NULL)
+                    {
+                        free(operationInput->block->blockName);
+                    }
                     free(operationInput->block);
                     break;
             }

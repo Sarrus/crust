@@ -24,6 +24,7 @@ enum crustLinkType {
  */
 struct crustBlock {
     CRUST_IDENTIFIER blockId;
+    char * blockName;
     CRUST_BLOCK * links[CRUST_MAX_LINKS];
     CRUST_TRACK_CIRCUIT * trackCircuit;
 };

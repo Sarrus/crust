@@ -141,7 +141,18 @@ int crust_interpret_block(char * message, CRUST_BLOCK * block, CRUST_STATE * sta
             return 1;
         }
 
-        if(*conversionStopPoint == '\0')
+        if(*conversionStopPoint == ':')
+        {
+            conversionStopPoint++;
+            if(*conversionStopPoint == '\0')
+            {
+                return 1;
+            }
+            block->blockName = malloc(strlen(conversionStopPoint));
+            strcpy(block->blockName, conversionStopPoint);
+            return 0;
+        }
+        else if(*conversionStopPoint == '\0')
         {
             return 0;
         }
@@ -316,6 +327,7 @@ CRUST_OPCODE crust_interpret_message(char * message, CRUST_MIXED_OPERATION_INPUT
  */
 size_t crust_print_block(CRUST_BLOCK * block, char * printBuffer) // printBuffer must point to
 {
+    // TODO: There is a potential overrun here if a block exists with a really long name FIX IT!!!
     char partBuffer[CRUST_MAX_MESSAGE_LENGTH];
     sprintf(printBuffer,"BL%i", block->blockId);
     for(int i = 0; i < CRUST_MAX_LINKS; i++)
@@ -326,8 +338,8 @@ size_t crust_print_block(CRUST_BLOCK * block, char * printBuffer) // printBuffer
             strcat(printBuffer, partBuffer);
         }
     }
-    // Current max length 58 bytes
-    strcat(printBuffer, "\n");
+    sprintf(partBuffer, ":%s\n", block->blockName);
+    strcat(printBuffer, partBuffer);
     return strlen(printBuffer);
 }
 

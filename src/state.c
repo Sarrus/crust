@@ -1,4 +1,6 @@
 #include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 #include "state.h"
 #include "terminal.h"
 
@@ -31,8 +33,43 @@ void crust_index_regrow(void ** index, unsigned int * indexLength, const unsigne
  * Adds a block to the block index, enabling CRUST to locate it by its block ID which is allocated at the same time.
  * All blocks that form part of the live layout must be in the index.
  */
-void crust_block_index_add(CRUST_BLOCK * block, CRUST_STATE * state)
+int crust_block_index_add(CRUST_BLOCK * block, CRUST_STATE * state)
 {
+    bool generateName = false;
+    CRUST_IDENTIFIER potentialName;
+    if(block->blockName == NULL)
+    {
+        generateName = true;
+        potentialName = state->blockIndexPointer;
+        asprintf(&block->blockName, "%i", potentialName);
+    }
+
+    for(;;)
+    {
+        int i = 0;
+        while(i < state->blockIndexPointer)
+        {
+            if(!strcmp(block->blockName, state->blockIndex[i]->blockName))
+            {
+                if(generateName)
+                {
+                    potentialName++;
+                    asprintf(&block->blockName, "%i", potentialName);
+                    break;
+                }
+                else
+                {
+                    return 1;
+                }
+            }
+            i++;
+        }
+        if(i == state->blockIndexPointer)
+        {
+            break;
+        }
+    }
+
     // Resize the index if we are running out of space.
     crust_index_regrow((void **) &state->blockIndex, &state->blockIndexLength, &state->blockIndexPointer, sizeof(CRUST_BLOCK *));
 
@@ -40,6 +77,8 @@ void crust_block_index_add(CRUST_BLOCK * block, CRUST_STATE * state)
     state->blockIndex[state->blockIndexPointer] = block;
     block->blockId = state->blockIndexPointer;
     state->blockIndexPointer++;
+
+    return 0;
 }
 
 /*
@@ -77,8 +116,9 @@ void crust_track_circuit_init(CRUST_TRACK_CIRCUIT ** trackCircuit, CRUST_STATE *
 /*
  * Takes a CRUST block with one or more links set (up and down main and branching)
  * and attempts to insert them into the CRUST layout. Returns 0 on success or:
- * 1: The block could not be inserted because it contains no links
+ * 1: The block could not be inserted because it's name was not unique
  * 2: The block could not be inserted because a link already exists to it's target
+ * 3: The block could not be inserted because it contains no links
  * */
 int crust_block_insert(CRUST_BLOCK * block, CRUST_STATE * state)
 {
@@ -97,6 +137,11 @@ int crust_block_insert(CRUST_BLOCK * block, CRUST_STATE * state)
 
     if(!linkCount)
     {
+        return 3;
+    }
+
+    if(crust_block_index_add(block, state))
+    {
         return 1;
     }
 
@@ -107,7 +152,7 @@ int crust_block_insert(CRUST_BLOCK * block, CRUST_STATE * state)
             block->links[i]->links[crustLinkInversions[i]] = block;
         }
     }
-    crust_block_index_add(block, state);
+
     return 0;
 }
 
