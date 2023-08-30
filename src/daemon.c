@@ -225,8 +225,8 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
                     crust_terminal_print_verbose("Block inserted successfully");
                     write = malloc(sizeof(CRUST_WRITE));
                     write->writeBuffer = malloc(CRUST_MAX_MESSAGE_LENGTH);
-                    write->bufferLength = crust_print_block(operationInput->block, write->writeBuffer);
                     write->targets = 0;
+                    write->bufferLength = crust_print_block(operationInput->block, &write->writeBuffer);
                     crust_write_to_listeners(pollList, bufferList, listLength, write);
                     break;
 

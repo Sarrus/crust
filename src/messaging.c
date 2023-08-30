@@ -325,22 +325,31 @@ CRUST_OPCODE crust_interpret_message(char * message, CRUST_MIXED_OPERATION_INPUT
  * Fills a buffer CRUST_MAX_MESSAGE_LENGTH bytes long with the properties of the specified block.
  * The buffer must already be allocated.
  */
-size_t crust_print_block(CRUST_BLOCK * block, char * printBuffer) // printBuffer must point to
+size_t crust_print_block(CRUST_BLOCK * block, char ** outBuffer) // printBuffer must point to
 {
-    // TODO: There is a potential overrun here if a block exists with a really long name FIX IT!!!
+    CRUST_DYNAMIC_PRINT_BUFFER * dynamicBuffer;
+    crust_dynamic_print_buffer_init(&dynamicBuffer);
+
     char partBuffer[CRUST_MAX_MESSAGE_LENGTH];
-    sprintf(printBuffer,"BL%i", block->blockId);
+
+    sprintf(partBuffer,"BL%i", block->blockId);
+    crust_dynamic_print_buffer_cat(&dynamicBuffer, partBuffer);
     for(int i = 0; i < CRUST_MAX_LINKS; i++)
     {
         if(block->links[i] != NULL)
         {
             sprintf(partBuffer, "%s%i", crustLinkDesignations[i], block->links[i]->blockId);
-            strcat(printBuffer, partBuffer);
+            crust_dynamic_print_buffer_cat(&dynamicBuffer, partBuffer);
         }
     }
-    sprintf(partBuffer, ":%s\n", block->blockName);
-    strcat(printBuffer, partBuffer);
-    return strlen(printBuffer);
+    char * blockNameBuffer;
+    asprintf(&blockNameBuffer, ":%s\n", block->blockName);
+    crust_dynamic_print_buffer_cat(&dynamicBuffer, blockNameBuffer);
+
+    *outBuffer = dynamicBuffer->buffer;
+    size_t finalLength = dynamicBuffer->pointer;
+    free(dynamicBuffer);
+    return finalLength;
 }
 
 size_t crust_print_track_circuit(CRUST_TRACK_CIRCUIT * trackCircuit, char ** outBuffer)
@@ -396,8 +405,9 @@ unsigned long crust_print_state(CRUST_STATE * state, char ** outBuffer)
     while(crust_block_get(blockToPrintId, &blockToPrint, state))
     {
         // Fill the line buffer with the details of the block, then add the line buffer to the end of the print buffer.
-        crust_print_block(blockToPrint, lineBuffer);
-        crust_dynamic_print_buffer_cat(&dynamicBuffer, lineBuffer);
+        crust_print_block(blockToPrint, &subDynamicBuffer);
+        crust_dynamic_print_buffer_cat(&dynamicBuffer, subDynamicBuffer);
+        free(subDynamicBuffer);
         blockToPrintId++;
     }
 
