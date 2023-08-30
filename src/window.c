@@ -8,6 +8,7 @@
 #include <curses.h>
 #include "window.h"
 #include "terminal.h"
+#include "state.h"
 
 _Noreturn void crust_window_stop()
 {
@@ -20,8 +21,9 @@ void crust_window_handle_signal(int signal)
     crust_window_stop();
 }
 
-_Noreturn void crust_window_loop()
+_Noreturn void crust_window_loop(CRUST_STATE * state)
 {
+    char * printstring;
     int i = 0;
     for(;;)
     {
@@ -46,6 +48,9 @@ _Noreturn void crust_window_loop()
                 addch('\\');
                 break;
         }
+        asprintf(&printstring, " Blocks: %i Track Circuits: %i", state->blockIndexPointer, state->trackCircuitIndexPointer);
+        addstr(printstring);
+        free(printstring);
         refresh();
         sleep(1);
         switch(getch())
@@ -58,6 +63,10 @@ _Noreturn void crust_window_loop()
 
 _Noreturn void crust_window_run()
 {
+    // Create an initial state
+    CRUST_STATE * state;
+    crust_state_init(&state);
+
     // Register the signal handlers
     signal(SIGINT, crust_window_handle_signal);
     signal(SIGTERM, crust_window_handle_signal);
@@ -81,5 +90,5 @@ _Noreturn void crust_window_run()
            "                        Trains\n");
     refresh();
 
-    crust_window_loop();
+    crust_window_loop(state);
 }
