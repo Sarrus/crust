@@ -321,11 +321,8 @@ CRUST_OPCODE crust_interpret_message(char * message, CRUST_MIXED_OPERATION_INPUT
             return NO_OPERATION;
     }
 }
-/*
- * Fills a buffer CRUST_MAX_MESSAGE_LENGTH bytes long with the properties of the specified block.
- * The buffer must already be allocated.
- */
-size_t crust_print_block(CRUST_BLOCK * block, char ** outBuffer) // printBuffer must point to
+
+size_t crust_print_block(CRUST_BLOCK * block, char ** outBuffer)
 {
     CRUST_DYNAMIC_PRINT_BUFFER * dynamicBuffer;
     crust_dynamic_print_buffer_init(&dynamicBuffer);
