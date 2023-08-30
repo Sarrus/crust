@@ -9,32 +9,26 @@
 #include "window.h"
 #include "terminal.h"
 
-_Noreturn void crust_window_run()
+_Noreturn void crust_window_stop()
 {
-    char buffer;
-    WINDOW * window = initscr();
-    if(window == NULL || cbreak() != OK || noecho() != OK || nonl() != OK)
-    {
-        crust_terminal_print("Failed to initialize screen.");
-        exit(EXIT_FAILURE);
-    }
+    endwin();
+    exit(EXIT_SUCCESS);
+}
 
-    addstr("   __________  __  _____________\n"
-           "  / ____/ __ \\/ / / / ___/_  __/\n"
-           " / /   / /_/ / / / /\\__ \\ / /   \n"
-           "/ /___/ _, _/ /_/ /___/ // /    \n"
-           "\\____/_/ |_|\\____//____//_/     \n"
-           "Consolidated,\n"
-           "      Realtime\n"
-           "            Updates on\n"
-           "                  Status of\n"
-           "                        Trains\n");
-    refresh();
+void crust_window_handle_signal(int signal)
+{
+    crust_window_stop();
+}
 
-    for(int i = 0; i < 10; i++)
+_Noreturn void crust_window_loop()
+{
+    int i = 0;
+    for(;;)
     {
+        i++;
+        i %= 4;
         move(10, 0);
-        switch(i % 4)
+        switch(i)
         {
             case 0:
                 addch('|');
@@ -54,7 +48,38 @@ _Noreturn void crust_window_run()
         }
         refresh();
         sleep(1);
+        switch(getch())
+        {
+            case 'q':
+                crust_window_stop();
+        }
     }
-    endwin();
-    exit(EXIT_SUCCESS);
+}
+
+_Noreturn void crust_window_run()
+{
+    // Register the signal handlers
+    signal(SIGINT, crust_window_handle_signal);
+    signal(SIGTERM, crust_window_handle_signal);
+
+    WINDOW * window = initscr();
+    if(window == NULL || cbreak() != OK || noecho() != OK || nonl() != OK || nodelay(window, true) != OK)
+    {
+        crust_terminal_print("Failed to initialize screen.");
+        exit(EXIT_FAILURE);
+    }
+
+    addstr("   __________  __  _____________\n"
+           "  / ____/ __ \\/ / / / ___/_  __/\n"
+           " / /   / /_/ / / / /\\__ \\ / /   \n"
+           "/ /___/ _, _/ /_/ /___/ // /    \n"
+           "\\____/_/ |_|\\____//____//_/     \n"
+           "Consolidated,\n"
+           "      Realtime\n"
+           "            Updates on\n"
+           "                  Status of\n"
+           "                        Trains\n");
+    refresh();
+
+    crust_window_loop();
 }
