@@ -6,9 +6,11 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <curses.h>
+#include <signal.h>
 #include "window.h"
 #include "terminal.h"
 #include "state.h"
+#include "client.h"
 
 _Noreturn void crust_window_stop()
 {
@@ -21,7 +23,7 @@ void crust_window_handle_signal(int signal)
     crust_window_stop();
 }
 
-_Noreturn void crust_window_loop(CRUST_STATE * state)
+_Noreturn void crust_window_loop(CRUST_STATE * state, int serverConnection)
 {
     char * printstring;
     int i = 0;
@@ -71,6 +73,8 @@ _Noreturn void crust_window_run()
     signal(SIGINT, crust_window_handle_signal);
     signal(SIGTERM, crust_window_handle_signal);
 
+    int serverConnection = crust_client_connect();
+
     WINDOW * window = initscr();
     if(window == NULL || cbreak() != OK || noecho() != OK || nonl() != OK || nodelay(window, true) != OK)
     {
@@ -90,5 +94,5 @@ _Noreturn void crust_window_run()
            "                        Trains\n");
     refresh();
 
-    crust_window_loop(state);
+    crust_window_loop(state, serverConnection);
 }

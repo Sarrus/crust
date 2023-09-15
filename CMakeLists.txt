@@ -9,6 +9,8 @@ target_link_libraries(crust curses)
 
 if(APPLE)
     target_compile_definitions(crust PRIVATE MACOS)
+else ()
+    target_compile_definitions(crust PRIVATE _GNU_SOURCE)
 endif()
 
 if(WITH_TESTING)
