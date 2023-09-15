@@ -7,10 +7,12 @@
 #include <unistd.h>
 #include <curses.h>
 #include <signal.h>
+#include <poll.h>
 #include "window.h"
 #include "terminal.h"
 #include "state.h"
 #include "client.h"
+#include "messaging.h"
 
 _Noreturn void crust_window_stop()
 {
@@ -23,12 +25,54 @@ void crust_window_handle_signal(int signal)
     crust_window_stop();
 }
 
-_Noreturn void crust_window_loop(CRUST_STATE * state, int serverConnection)
+_Noreturn void crust_window_loop(CRUST_STATE * state, struct pollfd * pollList)
 {
-    char * printstring;
+    char * printString;
+    char readBuffer[CRUST_MAX_MESSAGE_LENGTH];
+    int readPointer = 0;
     int i = 0;
     for(;;)
     {
+        // Poll the server and the keyboard
+        poll(pollList, 2, -1);
+
+        // Handle data from the server
+        if(pollList[1].revents & POLLHUP)
+        {
+            addstr("Server disconnected...");
+            refresh();
+            sleep(5);
+            crust_window_stop();
+        }
+        if(pollList[1].revents & POLLRDNORM)
+        {
+            // Try to read a character
+            if(!read(pollList[1].fd, &readBuffer[readPointer], 1))
+            {
+                addstr("Server disconnected...");
+                refresh();
+                sleep(5);
+                crust_window_stop();
+            }
+
+            // Recognise the end of the message
+            if(readBuffer[readPointer] == '\n')
+            {
+                readPointer = 0;
+            }
+            else if(readPointer > CRUST_MAX_MESSAGE_LENGTH)
+            {
+                addstr("Oversized message...");
+                refresh();
+                sleep(5);
+                crust_window_stop();
+            }
+            else
+            {
+                readPointer++;
+            }
+        }
+
         i++;
         i %= 4;
         move(10, 0);
@@ -50,11 +94,12 @@ _Noreturn void crust_window_loop(CRUST_STATE * state, int serverConnection)
                 addch('\\');
                 break;
         }
-        asprintf(&printstring, " Blocks: %i Track Circuits: %i", state->blockIndexPointer, state->trackCircuitIndexPointer);
-        addstr(printstring);
-        free(printstring);
+        asprintf(&printString, " Blocks: %i Track Circuits: %i", state->blockIndexPointer, state->trackCircuitIndexPointer);
+        addstr(printString);
+        free(printString);
         refresh();
-        sleep(1);
+
+        // Handle data from the keyboard
         switch(getch())
         {
             case 'q':
@@ -65,6 +110,8 @@ _Noreturn void crust_window_loop(CRUST_STATE * state, int serverConnection)
 
 _Noreturn void crust_window_run()
 {
+    struct pollfd pollList[2];
+
     // Create an initial state
     CRUST_STATE * state;
     crust_state_init(&state);
@@ -73,7 +120,15 @@ _Noreturn void crust_window_run()
     signal(SIGINT, crust_window_handle_signal);
     signal(SIGTERM, crust_window_handle_signal);
 
-    int serverConnection = crust_client_connect();
+    // Poll stdin for user input
+    pollList[0].fd = STDIN_FILENO;
+    pollList[0].events = POLLRDNORM;
+
+    // Poll the server for updates
+    pollList[1].fd = crust_client_connect();
+    pollList[1].events = POLLRDNORM;
+
+    write(pollList[1].fd, "SL\n", 3);
 
     WINDOW * window = initscr();
     if(window == NULL || cbreak() != OK || noecho() != OK || nonl() != OK || nodelay(window, true) != OK)
@@ -94,5 +149,5 @@ _Noreturn void crust_window_run()
            "                        Trains\n");
     refresh();
 
-    crust_window_loop(state, serverConnection);
+    crust_window_loop(state, pollList);
 }
