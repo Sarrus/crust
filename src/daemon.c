@@ -207,6 +207,107 @@ void crust_write_to_listeners(struct pollfd * pollList, CRUST_BUFFER_LIST_ENTRY 
     }
 }
 
+/*
+ * Takes a pointer to a CRUST message and the length of the message and returns the detected opcode. If there is an input
+ * to go with the operation, fills operationInput. See CRUST_MIXED_OPERATION_INPUT for details. If the opcode is not
+ * recognised or there is an error, returns NO_OPERATION.
+ */
+CRUST_OPCODE crust_daemon_interpret_message(char * message, CRUST_MIXED_OPERATION_INPUT * operationInput, CRUST_STATE * state)
+{
+    // Return NOP if the message is too short
+    if(strlen(message) < 2)
+    {
+        return NO_OPERATION;
+    }
+
+    switch(message[0])
+    {
+        case 'C':
+            switch(message[1])
+            {
+                case 'C':
+                    if(crust_interpret_identifier(&message[2], &operationInput->identifier))
+                    {
+                        crust_terminal_print_verbose("Invalid identifier");
+                        return NO_OPERATION;
+                    }
+                    return CLEAR_TRACK_CIRCUIT;
+
+                default:
+                    return NO_OPERATION;
+            }
+            break;
+
+        case 'I':
+            switch(message[1])
+            {
+                case 'B':
+                    // Initialise a block and try to fill it.
+                    crust_block_init(&operationInput->block, state);
+                    if(crust_interpret_block(&message[2], operationInput->block, state))
+                    {
+                        crust_terminal_print_verbose("Invalid block description message");
+                        free(operationInput->block);
+                        return NO_OPERATION;
+                    }
+                    return INSERT_BLOCK;
+
+                case 'C':
+                    crust_track_circuit_init(&operationInput->trackCircuit, state);
+                    if(crust_interpret_track_circuit(&message[2], operationInput->trackCircuit, state))
+                    {
+                        crust_terminal_print_verbose("Invalid circuit member list");
+                        free(operationInput->trackCircuit);
+                        return NO_OPERATION;
+                    }
+                    return INSERT_TRACK_CIRCUIT;
+
+                default:
+                    return NO_OPERATION;
+            }
+
+        case 'O':
+            switch(message[1])
+            {
+                case 'C':
+                    if(crust_interpret_identifier(&message[2], &operationInput->identifier))
+                    {
+                        crust_terminal_print_verbose("Invalid identifier");
+                        return NO_OPERATION;
+                    }
+                    return OCCUPY_TRACK_CIRCUIT;
+            }
+
+        case 'R':
+            switch(message[1])
+            {
+                case 'S':
+                    return RESEND_STATE;
+
+#ifdef TESTING
+                    case 'L':
+                    return RESEND_LIPSUM;
+#endif
+
+                default:
+                    return NO_OPERATION;
+            }
+
+        case 'S':
+            switch(message[1])
+            {
+                case 'L':
+                    return START_LISTENING;
+
+                default:
+                    return NO_OPERATION;
+            }
+
+        default:
+            return NO_OPERATION;
+    }
+}
+
 void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPUT * operationInput, CRUST_STATE * state,
                                 struct pollfd * pollList, CRUST_BUFFER_LIST_ENTRY * bufferList, int listPosition, int listLength)
 {
@@ -410,9 +511,9 @@ _Noreturn void crust_daemon_loop(CRUST_STATE * state)
 
                         // Interpret the message from the user, splitting it into an opcode and optionally some input
                         CRUST_MIXED_OPERATION_INPUT operationInput;
-                        CRUST_OPCODE opcode = crust_interpret_message(bufferList[i].inputBuffer.buffer,
-                                                                      &operationInput,
-                                                                      state);
+                        CRUST_OPCODE opcode = crust_daemon_interpret_message(bufferList[i].inputBuffer.buffer,
+                                                                             &operationInput,
+                                                                             state);
 
                         crust_daemon_process_opcode(opcode, &operationInput, state, pollList, bufferList, i, pollListLength);
 

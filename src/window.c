@@ -8,6 +8,7 @@
 #include <curses.h>
 #include <signal.h>
 #include <poll.h>
+#include <string.h>
 #include "window.h"
 #include "terminal.h"
 #include "state.h"
@@ -25,12 +26,79 @@ void crust_window_handle_signal(int signal)
     crust_window_stop();
 }
 
+bool crust_window_harvest_remote_id(char ** message, CRUST_IDENTIFIER * remoteID)
+{
+    char * conversionStopPoint;
+    *remoteID = strtoul(*message, &conversionStopPoint, 10);
+
+    if(conversionStopPoint == *message)
+    {
+        return false;
+    }
+    else
+    {
+        *message = conversionStopPoint;
+        return true;
+    }
+}
+
+CRUST_OPCODE crust_window_interpret_message(char * message, CRUST_MIXED_OPERATION_INPUT * operationInput,
+                                            CRUST_STATE * state,
+                                            CRUST_IDENTIFIER * remoteID)
+{
+    // Return NOP if the message is too short
+    if (strlen(message) < 2)
+    {
+        return NO_OPERATION;
+    }
+
+    char * messageAfterIdentifier = &message[2];
+
+    if(!crust_window_harvest_remote_id(&messageAfterIdentifier, remoteID))
+    {
+        crust_terminal_print_verbose("No remote identifier");
+        return NO_OPERATION;
+    }
+
+    // Ignore block 0
+    if(*remoteID == 0)
+    {
+        return NO_OPERATION;
+    }
+
+    switch(message[0])
+    {
+        case 'B':
+            switch(message[1])
+            {
+                case 'L':
+                    // Initialise a block and try to fill it.
+                    crust_block_init(&operationInput->block, state);
+                    if(crust_interpret_block(messageAfterIdentifier, operationInput->block, state))
+                    {
+                        crust_terminal_print_verbose("Invalid block description message");
+                        free(operationInput->block);
+                        return NO_OPERATION;
+                    }
+                    return INSERT_BLOCK;
+
+                default:
+                    return NO_OPERATION;
+            }
+
+        default:
+            return NO_OPERATION;
+    }
+}
+
 _Noreturn void crust_window_loop(CRUST_STATE * state, struct pollfd * pollList)
 {
     char * printString;
     char readBuffer[CRUST_MAX_MESSAGE_LENGTH];
     int readPointer = 0;
     int i = 0;
+    CRUST_IDENTIFIER remoteIdentifier;
+    CRUST_MIXED_OPERATION_INPUT operationInput;
     for(;;)
     {
         // Poll the server and the keyboard
@@ -58,6 +126,21 @@ _Noreturn void crust_window_loop(CRUST_STATE * state, struct pollfd * pollList)
             // Recognise the end of the message
             if(readBuffer[readPointer] == '\n')
             {
+                readBuffer[readPointer] = '\0';
+                switch(crust_window_interpret_message(readBuffer, &operationInput, state, &remoteIdentifier))
+                {
+                    case INSERT_BLOCK:
+                        if(crust_block_insert(operationInput.block, state))
+                        {
+                            crust_terminal_print("Received invalid block");
+                            exit(EXIT_FAILURE);
+                        }
+                        break;
+
+                    default:
+                        break;
+                }
+
                 readPointer = 0;
             }
             else if(readPointer > CRUST_MAX_MESSAGE_LENGTH)

@@ -45,7 +45,9 @@ union crustMixedOperationInput
     CRUST_IDENTIFIER identifier;
 };
 
-CRUST_OPCODE crust_interpret_message(char * message, CRUST_MIXED_OPERATION_INPUT * operationInput, CRUST_STATE * state);
+int crust_interpret_identifier(char * message, CRUST_IDENTIFIER * identifier);
+int crust_interpret_block(char * message, CRUST_BLOCK * block, CRUST_STATE * state);
+int crust_interpret_track_circuit(char * message, CRUST_TRACK_CIRCUIT * trackCircuit, CRUST_STATE * state);
 size_t crust_print_block(CRUST_BLOCK * block, char ** outBuffer);
 size_t crust_print_track_circuit(CRUST_TRACK_CIRCUIT * trackCircuit, char ** outBuffer);
 unsigned long crust_print_state(CRUST_STATE * state, char ** outBuffer);
