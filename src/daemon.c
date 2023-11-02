@@ -163,6 +163,15 @@ void crust_poll_list_and_buffer_list_regen(struct pollfd ** pollList, int * list
     *bufferList = newBufferList;
 }
 
+void crust_close_connection(struct pollfd * pollList, CRUST_BUFFER_LIST_ENTRY * bufferList, int listEntryID)
+{
+    shutdown(pollList[listEntryID].fd, SHUT_RDWR);
+    close(pollList[listEntryID].fd);
+    pollList[listEntryID].fd = -(pollList[listEntryID].fd);
+    pollList[listEntryID].revents = 0;
+    bufferList[listEntryID].listening = false;
+}
+
 void crust_write_queue_insert(struct pollfd * pollList, CRUST_BUFFER_LIST_ENTRY * bufferList, int listEntryID,
                                 CRUST_WRITE * writeToInsert)
 {
@@ -170,8 +179,7 @@ void crust_write_queue_insert(struct pollfd * pollList, CRUST_BUFFER_LIST_ENTRY 
     if((bufferList[listEntryID].writeQueueArrival + 1) % CRUST_MAX_WRITE_QUEUE_LENGTH == bufferList[listEntryID].writeQueueService)
     {
         crust_terminal_print_verbose("Write queue filled, terminating connection");
-        close(pollList[listEntryID].fd);
-        pollList[listEntryID].fd = -(pollList[listEntryID].fd);
+        crust_close_connection(pollList, bufferList, listEntryID);
         // TODO: If there are no other connections waiting for this CRUST_WRITE, free() the write.
         return;
     }
@@ -479,7 +487,7 @@ _Noreturn void crust_daemon_loop(CRUST_STATE * state)
             if(pollList[i].revents & POLLHUP)
             {
                 crust_terminal_print_verbose("Connection terminated.");
-                pollList[i].fd = -(pollList[i].fd);
+                crust_close_connection(pollList, bufferList, i);
             }
             // Receive some data if the socket is ready to be read
             else if(pollList[i].revents & (POLLRDBAND | POLLRDNORM))
