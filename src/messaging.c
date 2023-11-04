@@ -153,7 +153,7 @@ int crust_interpret_block(char * message, CRUST_BLOCK * block, CRUST_STATE * sta
             {
                 return 1;
             }
-            block->blockName = malloc(strlen(conversionStopPoint));
+            block->blockName = malloc(strlen(conversionStopPoint) + 1); // +1 to include the null byte
             strcpy(block->blockName, conversionStopPoint);
             return 0;
         }

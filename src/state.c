@@ -94,6 +94,7 @@ void crust_block_init(CRUST_BLOCK ** block, CRUST_STATE * state)
     }
 
     (*block)->trackCircuit = NULL;
+    (*block)->blockName = NULL;
 }
 
 void crust_track_circuit_index_add(CRUST_TRACK_CIRCUIT * trackCircuit, CRUST_STATE * state)
