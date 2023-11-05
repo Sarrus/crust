@@ -18,10 +18,10 @@
 #define CRUST_DEFAULT_IP_ADDRESS 0x100007f // 127.0.0.1
 
 enum crustRunMode {
-    CLI,
-    DAEMON,
-    NODE,
-    WINDOW
+    CRUST_RUN_MODE_CLI,
+    CRUST_RUN_MODE_DAEMON,
+    CRUST_RUN_MODE_NODE,
+    CRUST_RUN_MODE_WINDOW
 };
 
 extern bool crustOptionVerbose;
@@ -34,6 +34,7 @@ extern bool crustOptionSetGroup;
 extern gid_t crustOptionTargetGroup;
 extern in_port_t crustOptionPort;
 extern in_addr_t crustOptionIPAddress;
+extern bool crustOptionWindowEnterLog;
 
 #ifdef GPIO
 extern char crustOptionGPIOPath[PATH_MAX];

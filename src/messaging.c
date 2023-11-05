@@ -140,7 +140,7 @@ int crust_interpret_block(char * message, CRUST_BLOCK * block, CRUST_STATE * sta
             // Link to the existing block
             block->links[linkType] = linkBlock;
         }
-        else if(crustOptionRunMode == DAEMON)
+        else if(crustOptionRunMode == CRUST_RUN_MODE_DAEMON)
         {
             // Reject the block if we are in daemon mode. (Links that go nowhere are acceptable in other modes.)
             return 1;

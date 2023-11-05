@@ -14,6 +14,15 @@
 #include "state.h"
 #include "client.h"
 #include "messaging.h"
+#include "options.h"
+
+enum crustWindowMode {
+    LOG,
+    HOME
+};
+
+#define CRUST_WINDOW_MODE enum crustWindowMode
+#define CRUST_WINDOW_DEFAULT_MODE HOME
 
 _Noreturn void crust_window_stop()
 {
@@ -91,12 +100,61 @@ CRUST_OPCODE crust_window_interpret_message(char * message, CRUST_MIXED_OPERATIO
     }
 }
 
-_Noreturn void crust_window_loop(CRUST_STATE * state, struct pollfd * pollList)
+void crust_window_enter_mode(CRUST_WINDOW_MODE targetMode, WINDOW ** window)
+{
+    switch(targetMode)
+    {
+        case LOG:
+
+            break;
+
+        case HOME:
+            *window = initscr();
+            if(*window == NULL || cbreak() != OK || noecho() != OK || nonl() != OK || nodelay(*window, true) != OK)
+            {
+                crust_terminal_print("Failed to initialize screen.");
+                exit(EXIT_FAILURE);
+            }
+
+            addstr("   __________  __  _____________\n"
+                   "  / ____/ __ \\/ / / / ___/_  __/\n"
+                   " / /   / /_/ / / / /\\__ \\ / /   \n"
+                   "/ /___/ _, _/ /_/ /___/ // /    \n"
+                   "\\____/_/ |_|\\____//____//_/     \n"
+                   "Consolidated,\n"
+                   "      Realtime\n"
+                   "            Updates on\n"
+                   "                  Status of\n"
+                   "                        Trains\n");
+            refresh();
+            break;
+    }
+}
+
+void crust_window_print(char * message, CRUST_WINDOW_MODE mode)
+{
+    switch(mode)
+    {
+        case LOG:
+            crust_terminal_print(message);
+            break;
+
+        default:
+            move(10, 0);
+            clrtoeol();
+            addstr(message);
+            refresh();
+            break;
+    }
+}
+
+_Noreturn void crust_window_loop(CRUST_STATE * state, struct pollfd * pollList, WINDOW * window, CRUST_WINDOW_MODE mode)
 {
     char * printString;
     char readBuffer[CRUST_MAX_MESSAGE_LENGTH];
     int readPointer = 0;
-    int i = 0;
+    int spinnerPosition = 0;
+    char spinnerCharacter = '|';
     CRUST_IDENTIFIER remoteIdentifier;
     CRUST_MIXED_OPERATION_INPUT operationInput;
     for(;;)
@@ -107,8 +165,7 @@ _Noreturn void crust_window_loop(CRUST_STATE * state, struct pollfd * pollList)
         // Handle data from the server
         if(pollList[1].revents & POLLHUP)
         {
-            addstr("Server disconnected...");
-            refresh();
+            crust_window_print("Server disconnected...", mode);
             sleep(5);
             crust_window_stop();
         }
@@ -117,8 +174,7 @@ _Noreturn void crust_window_loop(CRUST_STATE * state, struct pollfd * pollList)
             // Try to read a character
             if(!read(pollList[1].fd, &readBuffer[readPointer], 1))
             {
-                addstr("Server disconnected...");
-                refresh();
+                crust_window_print("Server disconnected...", mode);
                 sleep(5);
                 crust_window_stop();
             }
@@ -132,9 +188,33 @@ _Noreturn void crust_window_loop(CRUST_STATE * state, struct pollfd * pollList)
                     case INSERT_BLOCK:
                         if(crust_block_insert(operationInput.block, state))
                         {
-                            crust_terminal_print("Received invalid block");
+                            crust_window_print("Received invalid block", mode);
                             exit(EXIT_FAILURE);
                         }
+
+                        spinnerPosition++;
+                        spinnerPosition %= 4;
+                        switch(spinnerPosition)
+                        {
+                            case 0:
+                                spinnerCharacter = '|';
+                                break;
+
+                            case 1:
+                                spinnerCharacter = '/';
+                                break;
+
+                            case 2:
+                                spinnerCharacter = '-';
+                                break;
+
+                            case 3:
+                                spinnerCharacter = '\\';
+                                break;
+                        }
+                        asprintf(&printString, "%c Blocks: %i Track Circuits: %i", spinnerCharacter, state->blockIndexPointer, state->trackCircuitIndexPointer);
+                        crust_window_print(printString, mode);
+                        free(printString);
                         break;
 
                     default:
@@ -145,8 +225,7 @@ _Noreturn void crust_window_loop(CRUST_STATE * state, struct pollfd * pollList)
             }
             else if(readPointer > CRUST_MAX_MESSAGE_LENGTH)
             {
-                addstr("Oversized message...");
-                refresh();
+                crust_window_print("Oversized message...", mode);
                 sleep(5);
                 crust_window_stop();
             }
@@ -155,32 +234,6 @@ _Noreturn void crust_window_loop(CRUST_STATE * state, struct pollfd * pollList)
                 readPointer++;
             }
         }
-
-        i++;
-        i %= 4;
-        move(10, 0);
-        switch(i)
-        {
-            case 0:
-                addch('|');
-                break;
-
-            case 1:
-                addch('/');
-                break;
-
-            case 2:
-                addch('-');
-                break;
-
-            case 3:
-                addch('\\');
-                break;
-        }
-        asprintf(&printString, " Blocks: %i Track Circuits: %i", state->blockIndexPointer, state->trackCircuitIndexPointer);
-        addstr(printString);
-        free(printString);
-        refresh();
 
         // Handle data from the keyboard
         switch(getch())
@@ -213,24 +266,20 @@ _Noreturn void crust_window_run()
 
     write(pollList[1].fd, "SL\n", 3);
 
-    WINDOW * window = initscr();
-    if(window == NULL || cbreak() != OK || noecho() != OK || nonl() != OK || nodelay(window, true) != OK)
+    CRUST_WINDOW_MODE windowStartingMode;
+
+    if(crustOptionWindowEnterLog)
     {
-        crust_terminal_print("Failed to initialize screen.");
-        exit(EXIT_FAILURE);
+        windowStartingMode = LOG;
+    }
+    else
+    {
+        windowStartingMode = CRUST_WINDOW_DEFAULT_MODE;
     }
 
-    addstr("   __________  __  _____________\n"
-           "  / ____/ __ \\/ / / / ___/_  __/\n"
-           " / /   / /_/ / / / /\\__ \\ / /   \n"
-           "/ /___/ _, _/ /_/ /___/ // /    \n"
-           "\\____/_/ |_|\\____//____//_/     \n"
-           "Consolidated,\n"
-           "      Realtime\n"
-           "            Updates on\n"
-           "                  Status of\n"
-           "                        Trains\n");
-    refresh();
+    WINDOW * window = NULL;
 
-    crust_window_loop(state, pollList);
+    crust_window_enter_mode(windowStartingMode, &window);
+
+    crust_window_loop(state, pollList, window, windowStartingMode);
 }

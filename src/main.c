@@ -38,7 +38,7 @@
 #endif
 
 bool crustOptionVerbose = false;
-enum crustRunMode crustOptionRunMode = CLI;
+enum crustRunMode crustOptionRunMode = CRUST_RUN_MODE_CLI;
 char crustOptionRunDirectory[PATH_MAX];
 char crustOptionSocketPath[PATH_MAX];
 bool crustOptionSetUser = false;
@@ -47,6 +47,7 @@ bool crustOptionSetGroup = false;
 gid_t crustOptionTargetGroup;
 in_port_t crustOptionPort = CRUST_DEFAULT_PORT;
 in_addr_t crustOptionIPAddress = CRUST_DEFAULT_IP_ADDRESS;
+bool crustOptionWindowEnterLog = false;
 
 #ifdef GPIO
 char crustOptionGPIOPath[PATH_MAX];
@@ -74,7 +75,7 @@ int main(int argc, char ** argv) {
 
     opterr = true;
     int option;
-    while((option = getopt(argc, argv, "a:dg:hm:n:p:r:u:vw")) != -1)
+    while((option = getopt(argc, argv, "a:dg:hlm:n:p:r:u:vw")) != -1)
     {
         switch(option)
         {
@@ -88,7 +89,7 @@ int main(int argc, char ** argv) {
                 break;
 
             case 'd':
-                crustOptionRunMode = DAEMON;
+                crustOptionRunMode = CRUST_RUN_MODE_DAEMON;
                 break;
 
             case 'g':
@@ -111,6 +112,7 @@ int main(int argc, char ** argv) {
                                      "group on the CRUST run directory. "
                                      "(Defaults to the primary group of the user specified by -u.)");
                 crust_terminal_print("  -h  Display this help.");
+                crust_terminal_print("  -l  If running in window mode, start into the log screen.");
                 crust_terminal_print("  -m  Specify track circuit to GPIO mapping in the format "
                                      "pin_number:circuit_number,[...]");
                 crust_terminal_print("  -n  Run in node mode. Takes the path to a GPIO chip as an argument.");
@@ -122,6 +124,9 @@ int main(int argc, char ** argv) {
                 crust_terminal_print("  -w  Run in window mode. (Show a live view of the line.)");
                 exit(EXIT_SUCCESS);
 
+            case 'l':
+                crustOptionWindowEnterLog = true;
+
             case 'm':
 #ifdef GPIO
                 crustOptionPinMapString = optarg;
@@ -130,7 +135,7 @@ int main(int argc, char ** argv) {
 
             case 'n':
 #ifdef GPIO
-                crustOptionRunMode = NODE;
+                crustOptionRunMode = CRUST_RUN_MODE_NODE;
                 strncpy(crustOptionGPIOPath, optarg, PATH_MAX - 1);
                 crustOptionGPIOPath[PATH_MAX - 1] = '\0';
 #else
@@ -186,7 +191,7 @@ int main(int argc, char ** argv) {
                 break;
 
             case 'w':
-                crustOptionRunMode = WINDOW;
+                crustOptionRunMode = CRUST_RUN_MODE_WINDOW;
                 break;
 
             case '?':
@@ -198,18 +203,18 @@ int main(int argc, char ** argv) {
     switch(crustOptionRunMode)
     {
         default:
-        case CLI:
+        case CRUST_RUN_MODE_CLI:
             break;
 
-        case DAEMON:
+        case CRUST_RUN_MODE_DAEMON:
             crust_daemon_run();
 
 #ifdef GPIO
-        case NODE:
+        case CRUST_RUN_MODE_NODE:
             crust_node_run();
 #endif
 
-        case WINDOW:
+        case CRUST_RUN_MODE_WINDOW:
             crust_window_run();
     }
 
