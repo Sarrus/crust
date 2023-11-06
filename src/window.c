@@ -100,7 +100,7 @@ CRUST_OPCODE crust_window_interpret_message(char * message, CRUST_MIXED_OPERATIO
     }
 }
 
-void crust_window_enter_mode(CRUST_WINDOW_MODE targetMode, WINDOW ** window)
+void crust_window_enter_mode(CRUST_WINDOW_MODE targetMode)
 {
     switch(targetMode)
     {
@@ -109,8 +109,8 @@ void crust_window_enter_mode(CRUST_WINDOW_MODE targetMode, WINDOW ** window)
             break;
 
         case HOME:
-            *window = initscr();
-            if(*window == NULL || cbreak() != OK || noecho() != OK || nonl() != OK || nodelay(*window, true) != OK)
+            initscr();
+            if(cbreak() != OK || noecho() != OK || nonl() != OK || nodelay(stdscr, TRUE) != OK)
             {
                 crust_terminal_print("Failed to initialize screen.");
                 exit(EXIT_FAILURE);
@@ -148,7 +148,7 @@ void crust_window_print(char * message, CRUST_WINDOW_MODE mode)
     }
 }
 
-_Noreturn void crust_window_loop(CRUST_STATE * state, struct pollfd * pollList, WINDOW * window, CRUST_WINDOW_MODE mode)
+_Noreturn void crust_window_loop(CRUST_STATE * state, struct pollfd * pollList, CRUST_WINDOW_MODE mode)
 {
     char * printString;
     char readBuffer[CRUST_MAX_MESSAGE_LENGTH];
@@ -277,9 +277,7 @@ _Noreturn void crust_window_run()
         windowStartingMode = CRUST_WINDOW_DEFAULT_MODE;
     }
 
-    WINDOW * window = NULL;
+    crust_window_enter_mode(windowStartingMode);
 
-    crust_window_enter_mode(windowStartingMode, &window);
-
-    crust_window_loop(state, pollList, window, windowStartingMode);
+    crust_window_loop(state, pollList, windowStartingMode);
 }
