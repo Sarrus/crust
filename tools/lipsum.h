@@ -1,7 +1,3 @@
-//
-// Created by Michael Bell on 06/11/2022.
-//
-
 #ifndef CRUST_LIPSUM_H
 #define CRUST_LIPSUM_H
 

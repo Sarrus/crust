@@ -1,18 +1,22 @@
-/*
- * CRUST: Consolidated Realtime Updates on Status of Trains
+/******************************************************************************
+ * Consolidated, Realtime Updates on Status of Trains (CRUST)
+ * Copyright (C) 2022-2023 Michael R. Bell <michael@black-dragon.io>
  *
- * CRUST is an application for monitoring the status of trains on light / heritage railways. It aims to provide very fast
- * updates as trains progress through their timetables. This is the C executable which functions as either the CRUST
- * command line tool or the CRUST daemon.
+ * This file is part of CRUST. For more information, visit
+ * <https://github.com/Sarrus/crust>
  *
- * The CRUST command line tool allows modification of a CRUST deployment by communicating directly with the CRUST daemon.
+ * CRUST is free software: you can redistribute it and/or modify it under the
+ * terms of the GNU General Public License as published by the Free Software
+ * Foundation, either version 3 of the License, or (at your option) any later
+ * version.
  *
- * The CRUST daemon is the fulcrum of a CRUST deployment. It holds railway state information in memory and records it in
- * a database. It also accepts status updates from CRUST writers and dispatches them to CRUST listeners.
+ * CRUST is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
  *
- * The CRUST daemon inherently trusts all communication it receives. To properly secure an installation, the CRUST API
- * must be positioned between the CRUST daemon and the outside world.
- */
+ * You should have received a copy of the GNU General Public License along with
+ * CRUST. If not, see <https://www.gnu.org/licenses/>.
+ *****************************************************************************/
 
 #include <stdio.h>
 #include <stdlib.h>
