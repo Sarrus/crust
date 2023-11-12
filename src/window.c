@@ -40,6 +40,20 @@ enum crustWindowMode {
 #define CRUST_WINDOW_MODE enum crustWindowMode
 #define CRUST_WINDOW_DEFAULT_MODE HOME
 
+#define WALK_UP   0b01
+#define WALK_DOWN 0b10
+
+#define CRUST_WALK_DIRECTION char
+
+struct crustLineMapEntry {
+    char character;
+    int xPos;
+    int yPos;
+};
+
+#define CRUST_LINE_MAP_ENTRY struct crustLineMapEntry
+#define CRUST_WALK_MEMORY_INCREMENT 100
+
 _Noreturn void crust_window_stop()
 {
     endwin();
@@ -164,6 +178,93 @@ void crust_window_print(char * message, CRUST_WINDOW_MODE mode)
     }
 }
 
+void crust_line_map_walk(
+         int xPos,
+         int yPos,
+         CRUST_WALK_DIRECTION walkDirection,
+         CRUST_BLOCK * block,
+         CRUST_LINE_MAP_ENTRY ** lineMapStart,
+         int * lineMapSize
+         )
+{
+    static int walkPointer;
+    static int walkMax = 0;
+    static CRUST_LINE_MAP_ENTRY * lineMap = NULL;
+
+    if(walkDirection == (WALK_UP | WALK_DOWN))
+    {
+        walkPointer = 0;
+    }
+
+    if(walkPointer >= (walkMax - 5)) // 5 is the maximum number of entries one call of this function will add
+    {
+        walkMax += CRUST_WALK_MEMORY_INCREMENT;
+        lineMap = realloc(lineMap, sizeof(CRUST_LINE_MAP_ENTRY) * walkMax);
+        if(lineMap == NULL)
+        {
+            crust_terminal_print("Memory allocation error.");
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    lineMap[walkPointer].character = '-';
+    lineMap[walkPointer].xPos = xPos;
+    lineMap[walkPointer].yPos = yPos;
+    walkPointer++;
+
+    if(walkDirection & WALK_DOWN)
+    {
+        if(block->links[downMain] != NULL)
+        {
+            lineMap[walkPointer].character = '-';
+            lineMap[walkPointer].xPos = xPos + 1;
+            lineMap[walkPointer].yPos = yPos;
+            walkPointer++;
+            crust_line_map_walk(xPos + 2, yPos, WALK_DOWN, block->links[downMain], NULL, NULL);
+        }
+
+        if(block->links[downBranching] != NULL)
+        {
+            lineMap[walkPointer].character = '\\';
+            lineMap[walkPointer].xPos = xPos + 1;
+            lineMap[walkPointer].yPos = yPos + 1;
+            walkPointer++;
+            crust_line_map_walk(xPos + 2, yPos + 2, WALK_DOWN, block->links[downBranching], NULL, NULL);
+        }
+    }
+
+    if(walkDirection & WALK_UP)
+    {
+        if(block->links[upMain] != NULL)
+        {
+            lineMap[walkPointer].character = '-';
+            lineMap[walkPointer].xPos = xPos - 1;
+            lineMap[walkPointer].yPos = yPos;
+            walkPointer++;
+            crust_line_map_walk(xPos - 2, yPos, WALK_UP, block->links[upMain], NULL, NULL);
+        }
+
+        if(block->links[upBranching] != NULL)
+        {
+            lineMap[walkPointer].character = '\\';
+            lineMap[walkPointer].xPos = xPos - 1;
+            lineMap[walkPointer].yPos = yPos - 1;
+            walkPointer++;
+            crust_line_map_walk(xPos - 2, yPos - 2, WALK_UP, block->links[upBranching], NULL, NULL);
+        }
+    }
+
+    if(lineMapSize != NULL)
+    {
+        *lineMapSize = walkPointer;
+    }
+
+    if(lineMapStart != NULL)
+    {
+        *lineMapStart = lineMap;
+    }
+}
+
 _Noreturn void crust_window_loop(CRUST_STATE * state, struct pollfd * pollList, CRUST_WINDOW_MODE mode)
 {
     char * printString;
@@ -173,6 +274,8 @@ _Noreturn void crust_window_loop(CRUST_STATE * state, struct pollfd * pollList, 
     char spinnerCharacter = '|';
     CRUST_IDENTIFIER remoteIdentifier;
     CRUST_MIXED_OPERATION_INPUT operationInput;
+    CRUST_LINE_MAP_ENTRY * lineMap;
+    int lineMapSize;
     for(;;)
     {
         // Poll the server and the keyboard
@@ -228,6 +331,18 @@ _Noreturn void crust_window_loop(CRUST_STATE * state, struct pollfd * pollList, 
                                 spinnerCharacter = '\\';
                                 break;
                         }
+
+                        if(mode == HOME)
+                        {
+                            crust_line_map_walk(0, 0, (WALK_DOWN | WALK_UP), state->initialBlock, &lineMap, &lineMapSize);
+                            clear();
+                            for(int i = 0; i < lineMapSize; i++)
+                            {
+                                move(lineMap[i].yPos, lineMap[i].xPos);
+                                addch(lineMap[i].character);
+                            }
+                        }
+
                         asprintf(&printString, "%c Blocks: %i Track Circuits: %i", spinnerCharacter, state->blockIndexPointer, state->trackCircuitIndexPointer);
                         crust_window_print(printString, mode);
                         free(printString);
