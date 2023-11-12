@@ -56,6 +56,7 @@ in_addr_t crustOptionIPAddress = CRUST_DEFAULT_IP_ADDRESS;
 #ifdef GPIO
 char crustOptionGPIOPath[PATH_MAX];
 char * crustOptionPinMapString = NULL;
+bool crustOptionInvertPinLogic = false;
 #endif
 
 int main(int argc, char ** argv) {
@@ -79,7 +80,7 @@ int main(int argc, char ** argv) {
 
     opterr = true;
     int option;
-    while((option = getopt(argc, argv, "a:dg:hlm:n:p:r:u:vw")) != -1)
+    while((option = getopt(argc, argv, "a:dg:hilm:n:p:r:u:vw")) != -1)
     {
         switch(option)
         {
@@ -116,6 +117,8 @@ int main(int argc, char ** argv) {
                                      "group on the CRUST run directory. "
                                      "(Defaults to the primary group of the user specified by -u.)");
                 crust_terminal_print("  -h  Display this help.");
+                crust_terminal_print("  -i  Invert the logic of the GPIO pins. "
+                                     "(High = clear instead of high = occupied.)");
                 // crust_terminal_print("  -l  If running in window mode, start into the log screen.");
                 crust_terminal_print("  -m  Specify track circuit to GPIO mapping in the format "
                                      "pin_number:circuit_number,[...]");
@@ -127,6 +130,12 @@ int main(int argc, char ** argv) {
                 crust_terminal_print("  -v  Display verbose output.");
                 // crust_terminal_print("  -w  Run in window mode. (Show a live view of the line.)");
                 exit(EXIT_SUCCESS);
+
+#ifdef GPIO
+            case 'i':
+                crustOptionInvertPinLogic = true;
+                break;
+#endif
 
 //            case 'l':
 //                crustOptionWindowEnterLog = true;

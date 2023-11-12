@@ -59,6 +59,7 @@ extern in_addr_t crustOptionIPAddress;
 #ifdef GPIO
 extern char crustOptionGPIOPath[PATH_MAX];
 extern char * crustOptionPinMapString;
+extern bool crustOptionInvertPinLogic;
 #endif
 
 #endif //CRUST_OPTIONS_H

@@ -130,7 +130,13 @@ void crust_node_handle_signal(int signal)
     }
 }
 
-_Noreturn void crust_node_loop(int listLength, CRUST_GPIO_PIN_MAP * pinMap, struct pollfd * pollList)
+_Noreturn void crust_node_loop(
+        int listLength,
+        CRUST_GPIO_PIN_MAP * pinMap,
+        struct pollfd * pollList,
+        int circuitOccupiedEvent,
+        int circuitClearEvent
+        )
 {
     struct timespec now;
     int pollTimeout = 1; // Set the first poll to time out straight away
@@ -156,11 +162,11 @@ _Noreturn void crust_node_loop(int listLength, CRUST_GPIO_PIN_MAP * pinMap, stru
             if(pollList[i].revents)
             {
                 gpiod_line_event_read_fd(pollList[i].fd, &event);
-                if(event.event_type == GPIOD_LINE_EVENT_FALLING_EDGE)
+                if(event.event_type == circuitClearEvent)
                 {
                     pinMap[i].lastOccupationRead = false;
                 }
-                else if(event.event_type == GPIOD_LINE_EVENT_RISING_EDGE)
+                else if(event.event_type == circuitOccupiedEvent)
                 {
                     pinMap[i].lastOccupationRead = true;
                 }
@@ -200,6 +206,9 @@ _Noreturn void crust_node_loop(int listLength, CRUST_GPIO_PIN_MAP * pinMap, stru
 
 _Noreturn void crust_node_run()
 {
+    int circuitOccupiedEvent = GPIOD_LINE_EVENT_RISING_EDGE;
+    int circuitClearEvent = GPIOD_LINE_EVENT_FALLING_EDGE;
+
     crust_terminal_print_verbose("CRUST node starting...");
 
     crust_terminal_print_verbose("Binding to GPIO chip...");
@@ -255,6 +264,13 @@ _Noreturn void crust_node_run()
 
     crust_generate_pin_map_and_poll_list(crustOptionPinMapString, &listLength, &pinMap, &pollList);
 
+    // If the user has requested inverted pin logic, reverse the event types
+    if(crustOptionInvertPinLogic)
+    {
+        circuitOccupiedEvent = GPIOD_LINE_EVENT_FALLING_EDGE;
+        circuitClearEvent = GPIOD_LINE_EVENT_RISING_EDGE;
+    }
+
     for(int i = 1; i < listLength; i++)
     {
         pinMap[i].gpioLine = gpiod_chip_get_line(gpioChip, pinMap[i].pinID);
@@ -273,7 +289,14 @@ _Noreturn void crust_node_run()
         // Set to immediately trigger a state update when the loop starts
         pinMap[i].lastReadAt.tv_nsec = 0;
         pinMap[i].lastReadAt.tv_sec = 0;
-        pinMap[i].lastOccupationRead = gpiod_line_get_value(pinMap[i].gpioLine);
+        if(crustOptionInvertPinLogic)
+        {
+            pinMap[i].lastOccupationRead = !gpiod_line_get_value(pinMap[i].gpioLine);
+        }
+        else
+        {
+            pinMap[i].lastOccupationRead = gpiod_line_get_value(pinMap[i].gpioLine);
+        }
         pinMap[i].lastOccupationSent = !pinMap[i].lastOccupationRead;
 
         pollList[i].fd = gpiod_line_event_get_fd(pinMap[i].gpioLine);
@@ -295,5 +318,5 @@ _Noreturn void crust_node_run()
                  "STATUS=CRUST Node running");
 #endif
 
-    crust_node_loop(listLength, pinMap, pollList);
+    crust_node_loop(listLength, pinMap, pollList, circuitOccupiedEvent, circuitClearEvent);
 }
