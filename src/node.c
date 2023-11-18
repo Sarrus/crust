@@ -191,11 +191,11 @@ _Noreturn void crust_node_loop(
                 {
                     if(pinMap[i].lastOccupationRead)
                     {
-                        dprintf(pollList[0].fd, "OC;%i;\r\n", pinMap[i].trackCircuitID);
+                        dprintf(pollList[0].fd, "OC%i\n", pinMap[i].trackCircuitID);
                     }
                     else
                     {
-                        dprintf(pollList[0].fd, "CC;%i;\r\n", pinMap[i].trackCircuitID);
+                        dprintf(pollList[0].fd, "CC%i\n", pinMap[i].trackCircuitID);
                     }
                     pinMap[i].lastOccupationSent = pinMap[i].lastOccupationRead;
                 }
