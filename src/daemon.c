@@ -669,6 +669,14 @@ _Noreturn void crust_daemon_run()
     address.sin_len = sizeof(struct sockaddr_in);
 #endif
 
+    // Allow the socket to re-use an address from a previous instance of CRUST
+    int yes = 1;
+    if(setsockopt(socketFp, SOL_SOCKET, SO_REUSEADDR, (void*)&yes, sizeof(yes)))
+    {
+        crust_terminal_print("Failed to enable address reuse on the socket.");
+        exit(EXIT_FAILURE);
+    }
+
     // Bind to the interface
     if(bind(socketFp, (struct sockaddr *) &address, sizeof(address)) == -1)
     {
@@ -677,7 +685,6 @@ _Noreturn void crust_daemon_run()
             crust_terminal_print("Unable to bind to interface - permission denied. ");
             exit(EXIT_FAILURE);
         }
-
         crust_terminal_print("Failed to bind to interface.");
         exit(EXIT_FAILURE);
     }
