@@ -264,7 +264,21 @@ CRUST_OPCODE crust_daemon_interpret_message(char * message, CRUST_MIXED_OPERATIO
                 default:
                     return NO_OPERATION;
             }
-            break;
+
+        case 'E':
+            switch(message[1])
+            {
+                case 'B':
+                    if(crust_interpret_identifier(&message[2], &operationInput->identifier))
+                    {
+                        crust_terminal_print_verbose("Invalid identifier");
+                        return NO_OPERATION;
+                    }
+                    return ENABLE_BERTH;
+
+                default:
+                    return NO_OPERATION;
+            }
 
         case 'I':
             switch(message[1])
@@ -341,6 +355,7 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
 {
     CRUST_WRITE * write;
     CRUST_TRACK_CIRCUIT * identifiedTrackCircuit;
+    CRUST_BLOCK * identifiedBlock;
 
     // Process the user's operation
     switch(opcode)
@@ -464,6 +479,19 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
                 write = malloc(sizeof(CRUST_WRITE));
                 write->targets = 0;
                 write->bufferLength = crust_print_track_circuit(identifiedTrackCircuit, &write->writeBuffer);
+                crust_write_to_listeners(pollList, bufferList, listLength, write);
+            }
+            break;
+
+        case ENABLE_BERTH:
+            crust_terminal_print_verbose("OPCODE: Enable Berth");
+            if(crust_block_get(operationInput->identifier, &identifiedBlock, state))
+            {
+                crust_enable_berth(identifiedBlock);
+                write = malloc(sizeof(CRUST_WRITE));
+                write->writeBuffer = malloc(CRUST_MAX_MESSAGE_LENGTH);
+                write->targets = 0;
+                write->bufferLength = crust_print_block(identifiedBlock, &write->writeBuffer);
                 crust_write_to_listeners(pollList, bufferList, listLength, write);
             }
             break;

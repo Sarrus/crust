@@ -40,7 +40,9 @@ enum crustOpcode {
     INSERT_TRACK_CIRCUIT,
     START_LISTENING,
     CLEAR_TRACK_CIRCUIT,
-    OCCUPY_TRACK_CIRCUIT
+    OCCUPY_TRACK_CIRCUIT,
+    ENABLE_BERTH
+    INTERPOSE
 };
 
 struct crustInputBuffer {

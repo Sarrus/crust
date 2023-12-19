@@ -29,6 +29,7 @@
 #define CRUST_LINK_TYPE enum crustLinkType
 #define CRUST_IDENTIFIER u_int32_t
 #define CRUST_MAX_LINKS 4
+#define CRUST_HEADCODE_LENGTH 4
 
 enum crustLinkType {
     upMain,
@@ -42,6 +43,8 @@ struct crustBlock {
     char * blockName;
     CRUST_BLOCK * links[CRUST_MAX_LINKS];
     CRUST_TRACK_CIRCUIT * trackCircuit;
+    bool berth;
+    char headcode[CRUST_HEADCODE_LENGTH + 1]; // +1 for trailing null
 };
 
 struct crustTrackCircuit {
@@ -69,5 +72,6 @@ void crust_track_circuit_init(CRUST_TRACK_CIRCUIT ** trackCircuit, CRUST_STATE *
 int crust_block_insert(CRUST_BLOCK * block, CRUST_STATE * state);
 int crust_track_circuit_insert(CRUST_TRACK_CIRCUIT * trackCircuit, CRUST_STATE * state);
 bool crust_track_circuit_set_occupation(CRUST_TRACK_CIRCUIT * trackCircuit, bool occupied, CRUST_STATE * state);
+void crust_enable_berth(CRUST_BLOCK * block);
 
 #endif //CRUST_STATE_H

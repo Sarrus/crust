@@ -115,6 +115,8 @@ void crust_block_init(CRUST_BLOCK ** block, CRUST_STATE * state)
 
     (*block)->trackCircuit = NULL;
     (*block)->blockName = NULL;
+    (*block)->berth = false;
+    memset((*block)->headcode, '\0', CRUST_HEADCODE_LENGTH + 1);
 }
 
 void crust_track_circuit_index_add(CRUST_TRACK_CIRCUIT * trackCircuit, CRUST_STATE * state)
@@ -267,4 +269,9 @@ bool crust_track_circuit_set_occupation(CRUST_TRACK_CIRCUIT * trackCircuit, bool
 
     trackCircuit->occupied = occupied;
     return true;
+}
+
+void crust_enable_berth(CRUST_BLOCK * block)
+{
+    block->berth = true;
 }

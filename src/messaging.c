@@ -248,6 +248,7 @@ size_t crust_print_block(CRUST_BLOCK * block, char ** outBuffer)
     crust_dynamic_print_buffer_init(&dynamicBuffer);
 
     char partBuffer[CRUST_MAX_MESSAGE_LENGTH];
+    char * dynamicPartBuffer;
 
     sprintf(partBuffer,"BL%i", block->blockId);
     crust_dynamic_print_buffer_cat(&dynamicBuffer, partBuffer);
@@ -259,9 +260,20 @@ size_t crust_print_block(CRUST_BLOCK * block, char ** outBuffer)
             crust_dynamic_print_buffer_cat(&dynamicBuffer, partBuffer);
         }
     }
-    char * blockNameBuffer;
-    asprintf(&blockNameBuffer, ":%s\n", block->blockName);
-    crust_dynamic_print_buffer_cat(&dynamicBuffer, blockNameBuffer);
+
+    if(block->berth)
+    {
+        crust_dynamic_print_buffer_cat(&dynamicBuffer, "H");
+
+        if(block->headcode[0])
+        {
+            crust_dynamic_print_buffer_cat(&dynamicBuffer, block->headcode);
+        }
+    }
+
+    asprintf(&dynamicPartBuffer, ":%s\n", block->blockName);
+    crust_dynamic_print_buffer_cat(&dynamicBuffer, dynamicPartBuffer);
+    free(dynamicPartBuffer);
 
     *outBuffer = dynamicBuffer->buffer;
     size_t finalLength = dynamicBuffer->pointer;
