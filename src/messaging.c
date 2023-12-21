@@ -269,8 +269,10 @@ int crust_interpret_interpose_instruction(char * message, CRUST_INTERPOSE_INSTRU
     {
         int readPos = i + 1;
         if(
-                (conversionStopPoint[readPos] < 'A'
-                || conversionStopPoint[readPos] > 'Z')
+                (conversionStopPoint[readPos] < '0'
+                    || conversionStopPoint[readPos] > '9')
+                && (conversionStopPoint[readPos] < 'A'
+                    || conversionStopPoint[readPos] > 'Z')
                 && conversionStopPoint[readPos] != '_'
                 && conversionStopPoint[readPos] != '*'
                 )
