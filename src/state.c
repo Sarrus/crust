@@ -116,7 +116,13 @@ void crust_block_init(CRUST_BLOCK ** block, CRUST_STATE * state)
     (*block)->trackCircuit = NULL;
     (*block)->blockName = NULL;
     (*block)->berth = false;
-    memset((*block)->headcode, '\0', CRUST_HEADCODE_LENGTH + 1);
+
+    for(int i = 0; i < CRUST_HEADCODE_LENGTH; i++)
+    {
+        (*block)->headcode[i] = CRUST_EMPTY_BERTH_CHARACTER;
+    }
+
+    (*block)->headcode[CRUST_HEADCODE_LENGTH] = '\0';
 }
 
 void crust_track_circuit_index_add(CRUST_TRACK_CIRCUIT * trackCircuit, CRUST_STATE * state)

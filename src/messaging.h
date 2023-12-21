@@ -27,6 +27,7 @@
 #define CRUST_OPCODE enum crustOpcode
 #define CRUST_INPUT_BUFFER struct crustInputBuffer
 #define CRUST_DYNAMIC_PRINT_BUFFER struct crustDynamicPrintBuffer
+#define CRUST_INTERPOSE_INSTRUCTION struct crustInterposeInstruction
 #define CRUST_MIXED_OPERATION_INPUT union crustMixedOperationInput
 #define CRUST_MAX_MESSAGE_LENGTH 256
 
@@ -41,7 +42,8 @@ enum crustOpcode {
     START_LISTENING,
     CLEAR_TRACK_CIRCUIT,
     OCCUPY_TRACK_CIRCUIT,
-    ENABLE_BERTH
+    ENABLE_BERTH,
+    INTERPOSE
 };
 
 struct crustInputBuffer {
@@ -55,16 +57,23 @@ struct crustDynamicPrintBuffer {
     unsigned long pointer;
 };
 
+struct crustInterposeInstruction{
+    CRUST_IDENTIFIER blockID;
+    char headcode[CRUST_HEADCODE_LENGTH + 1];
+};
+
 union crustMixedOperationInput
 {
     CRUST_BLOCK * block;
     CRUST_TRACK_CIRCUIT * trackCircuit;
     CRUST_IDENTIFIER identifier;
+    CRUST_INTERPOSE_INSTRUCTION * interposeInstruction;
 };
 
 int crust_interpret_identifier(char * message, CRUST_IDENTIFIER * identifier);
 int crust_interpret_block(char * message, CRUST_BLOCK * block, CRUST_STATE * state);
 int crust_interpret_track_circuit(char * message, CRUST_TRACK_CIRCUIT * trackCircuit, CRUST_STATE * state);
+int crust_interpret_interpose_instruction(char * message, CRUST_INTERPOSE_INSTRUCTION * interposeInstruction);
 size_t crust_print_block(CRUST_BLOCK * block, char ** outBuffer);
 size_t crust_print_track_circuit(CRUST_TRACK_CIRCUIT * trackCircuit, char ** outBuffer);
 unsigned long crust_print_state(CRUST_STATE * state, char ** outBuffer);

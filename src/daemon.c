@@ -304,6 +304,17 @@ CRUST_OPCODE crust_daemon_interpret_message(char * message, CRUST_MIXED_OPERATIO
                     }
                     return INSERT_TRACK_CIRCUIT;
 
+                case 'P':
+                    operationInput->interposeInstruction = malloc(sizeof(CRUST_INTERPOSE_INSTRUCTION));
+                    if(crust_interpret_interpose_instruction(&message[2], operationInput->interposeInstruction))
+                    {
+                        crust_terminal_print_verbose("Invalid interpose instruction");
+                        free(operationInput->interposeInstruction);
+                        return NO_OPERATION;
+                    }
+                    return INTERPOSE;
+
+
                 default:
                     return NO_OPERATION;
             }
@@ -494,6 +505,10 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
                 write->bufferLength = crust_print_block(identifiedBlock, &write->writeBuffer);
                 crust_write_to_listeners(pollList, bufferList, listLength, write);
             }
+            break;
+
+        case INTERPOSE:
+            crust_terminal_print_verbose("OPCODE: Interpose");
             break;
 
             // Do nothing

@@ -242,6 +242,48 @@ int crust_interpret_identifier(char * message, CRUST_IDENTIFIER * identifier)
     }
 }
 
+int crust_interpret_interpose_instruction(char * message, CRUST_INTERPOSE_INSTRUCTION * interposeInstruction)
+{
+    errno = 0;
+    char * conversionStopPoint = "";
+    unsigned long long readValue = strtoull(message, &conversionStopPoint, 10);
+    if(!errno // There was no error
+       && conversionStopPoint != message // Some numerals were read
+       && readValue <= UINT32_MAX // The value was less than the maximum
+       && *conversionStopPoint == '/' ) // The end was a '/'
+    {
+        interposeInstruction->blockID = readValue;
+    }
+    else
+    {
+        return 1;
+    }
+
+    size_t headcodeLength = strlen(&conversionStopPoint[1]);
+    if(headcodeLength != CRUST_HEADCODE_LENGTH)
+    {
+        return 3;
+    }
+
+    for(int i = 0; i < CRUST_HEADCODE_LENGTH; i++)
+    {
+        int readPos = i + 1;
+        if(
+                (conversionStopPoint[readPos] < 'A'
+                || conversionStopPoint[readPos] > 'Z')
+                && conversionStopPoint[readPos] != '_'
+                && conversionStopPoint[readPos] != '*'
+                )
+        {
+            return 4;
+        }
+
+        interposeInstruction->headcode[i] = conversionStopPoint[readPos];
+    }
+
+    return 0;
+}
+
 size_t crust_print_block(CRUST_BLOCK * block, char ** outBuffer)
 {
     CRUST_DYNAMIC_PRINT_BUFFER * dynamicBuffer;
@@ -263,12 +305,8 @@ size_t crust_print_block(CRUST_BLOCK * block, char ** outBuffer)
 
     if(block->berth)
     {
-        crust_dynamic_print_buffer_cat(&dynamicBuffer, "H");
-
-        if(block->headcode[0])
-        {
-            crust_dynamic_print_buffer_cat(&dynamicBuffer, block->headcode);
-        }
+        crust_dynamic_print_buffer_cat(&dynamicBuffer, "/");
+        crust_dynamic_print_buffer_cat(&dynamicBuffer, block->headcode);
     }
 
     asprintf(&dynamicPartBuffer, ":%s\n", block->blockName);

@@ -30,6 +30,7 @@
 #define CRUST_IDENTIFIER u_int32_t
 #define CRUST_MAX_LINKS 4
 #define CRUST_HEADCODE_LENGTH 4
+#define CRUST_EMPTY_BERTH_CHARACTER '_'
 
 enum crustLinkType {
     upMain,
