@@ -262,7 +262,7 @@ int crust_interpret_interpose_instruction(char * message, CRUST_INTERPOSE_INSTRU
     size_t headcodeLength = strlen(&conversionStopPoint[1]);
     if(headcodeLength != CRUST_HEADCODE_LENGTH)
     {
-        return 3;
+        return 2;
     }
 
     for(int i = 0; i < CRUST_HEADCODE_LENGTH; i++)
@@ -275,7 +275,7 @@ int crust_interpret_interpose_instruction(char * message, CRUST_INTERPOSE_INSTRU
                 && conversionStopPoint[readPos] != '*'
                 )
         {
-            return 4;
+            return 3;
         }
 
         interposeInstruction->headcode[i] = conversionStopPoint[readPos];
