@@ -27,6 +27,7 @@
 #define CRUST_TRACK_CIRCUIT struct crustTrackCircuit
 #define CRUST_STATE struct crustState
 #define CRUST_LINK_TYPE enum crustLinkType
+#define CRUST_INTERPOSE_INSTRUCTION struct crustInterposeInstruction
 #define CRUST_IDENTIFIER u_int32_t
 #define CRUST_MAX_LINKS 4
 #define CRUST_HEADCODE_LENGTH 4
@@ -65,6 +66,11 @@ struct crustState {
     unsigned int trackCircuitIndexPointer;
 };
 
+struct crustInterposeInstruction{
+    CRUST_IDENTIFIER blockID;
+    char headcode[CRUST_HEADCODE_LENGTH + 1];
+};
+
 void crust_state_init(CRUST_STATE ** state);
 bool crust_block_get(unsigned int blockId, CRUST_BLOCK ** block, CRUST_STATE * state);
 bool crust_track_circuit_get(unsigned int trackCircuitId, CRUST_TRACK_CIRCUIT ** trackCircuit, CRUST_STATE * state);
@@ -74,5 +80,6 @@ int crust_block_insert(CRUST_BLOCK * block, CRUST_STATE * state);
 int crust_track_circuit_insert(CRUST_TRACK_CIRCUIT * trackCircuit, CRUST_STATE * state);
 bool crust_track_circuit_set_occupation(CRUST_TRACK_CIRCUIT * trackCircuit, bool occupied, CRUST_STATE * state);
 void crust_enable_berth(CRUST_BLOCK * block);
+bool crust_interpose(CRUST_BLOCK * block, char * headcode);
 
 #endif //CRUST_STATE_H

@@ -281,3 +281,19 @@ void crust_enable_berth(CRUST_BLOCK * block)
 {
     block->berth = true;
 }
+
+bool crust_interpose(CRUST_BLOCK * block, char * headcode)
+{
+    if(!block->berth)
+    {
+        return false;
+    }
+
+    for(int i = 0; i < CRUST_HEADCODE_LENGTH; i++)
+    {
+        block->headcode[i] = headcode[i];
+    }
+    block->headcode[CRUST_HEADCODE_LENGTH] = '\0';
+
+    return true;
+}

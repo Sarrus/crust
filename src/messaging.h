@@ -27,7 +27,6 @@
 #define CRUST_OPCODE enum crustOpcode
 #define CRUST_INPUT_BUFFER struct crustInputBuffer
 #define CRUST_DYNAMIC_PRINT_BUFFER struct crustDynamicPrintBuffer
-#define CRUST_INTERPOSE_INSTRUCTION struct crustInterposeInstruction
 #define CRUST_MIXED_OPERATION_INPUT union crustMixedOperationInput
 #define CRUST_MAX_MESSAGE_LENGTH 256
 
@@ -57,10 +56,7 @@ struct crustDynamicPrintBuffer {
     unsigned long pointer;
 };
 
-struct crustInterposeInstruction{
-    CRUST_IDENTIFIER blockID;
-    char headcode[CRUST_HEADCODE_LENGTH + 1];
-};
+
 
 union crustMixedOperationInput
 {

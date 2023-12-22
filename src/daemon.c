@@ -509,6 +509,22 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
 
         case INTERPOSE:
             crust_terminal_print_verbose("OPCODE: Interpose");
+            if(!crust_block_get(operationInput->interposeInstruction->blockID, &identifiedBlock, state))
+            {
+                crust_terminal_print_verbose("Invalid block");
+                break;
+            }
+            if(!crust_interpose(identifiedBlock, operationInput->interposeInstruction->headcode))
+            {
+                crust_terminal_print_verbose("Block is not a berth");
+                break;
+            }
+
+            write = malloc(sizeof(CRUST_WRITE));
+            write->writeBuffer = malloc(CRUST_MAX_MESSAGE_LENGTH);
+            write->targets = 0;
+            write->bufferLength = crust_print_block(identifiedBlock, &write->writeBuffer);
+            crust_write_to_listeners(pollList, bufferList, listLength, write);
             break;
 
             // Do nothing
