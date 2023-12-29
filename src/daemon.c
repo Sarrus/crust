@@ -268,13 +268,21 @@ CRUST_OPCODE crust_daemon_interpret_message(char * message, CRUST_MIXED_OPERATIO
         case 'E':
             switch(message[1])
             {
-                case 'B':
+                case 'U':
                     if(crust_interpret_identifier(&message[2], &operationInput->identifier))
                     {
                         crust_terminal_print_verbose("Invalid identifier");
                         return NO_OPERATION;
                     }
-                    return ENABLE_BERTH;
+                    return ENABLE_BERTH_UP;
+
+                case 'D':
+                    if(crust_interpret_identifier(&message[2], &operationInput->identifier))
+                    {
+                        crust_terminal_print_verbose("Invalid identifier");
+                        return NO_OPERATION;
+                    }
+                    return ENABLE_BERTH_DOWN;
 
                 default:
                     return NO_OPERATION;
@@ -494,11 +502,24 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
             }
             break;
 
-        case ENABLE_BERTH:
-            crust_terminal_print_verbose("OPCODE: Enable Berth");
-            if(crust_block_get(operationInput->identifier, &identifiedBlock, state))
+        case ENABLE_BERTH_UP:
+            crust_terminal_print_verbose("OPCODE: Enable Berth UP");
+            if(crust_block_get(operationInput->identifier, &identifiedBlock, state)
+                && crust_enable_berth(identifiedBlock, UP))
             {
-                crust_enable_berth(identifiedBlock);
+                write = malloc(sizeof(CRUST_WRITE));
+                write->writeBuffer = malloc(CRUST_MAX_MESSAGE_LENGTH);
+                write->targets = 0;
+                write->bufferLength = crust_print_block(identifiedBlock, &write->writeBuffer);
+                crust_write_to_listeners(pollList, bufferList, listLength, write);
+            }
+            break;
+
+        case ENABLE_BERTH_DOWN:
+            crust_terminal_print_verbose("OPCODE: Enable Berth DOWN");
+            if(crust_block_get(operationInput->identifier, &identifiedBlock, state)
+               && crust_enable_berth(identifiedBlock, DOWN))
+            {
                 write = malloc(sizeof(CRUST_WRITE));
                 write->writeBuffer = malloc(CRUST_MAX_MESSAGE_LENGTH);
                 write->targets = 0;

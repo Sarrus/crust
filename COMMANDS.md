@@ -79,3 +79,13 @@ Sets a track circuit to occupied.
 CC[track circuit number]
 ```
 Sets a track circuit to cleared.
+
+## Enable berth (Up / Down)
+```
+EU[block number]
+ED[block number]
+```
+Sets the specified block to function as a berth. A block that
+is designated as a berth can hold a headcode. You can only enable
+a block to function as a berth in one direction. To berth in both
+directions, create two blocks joined together and enable both of them.

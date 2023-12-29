@@ -123,6 +123,8 @@ void crust_block_init(CRUST_BLOCK ** block, CRUST_STATE * state)
     }
 
     (*block)->headcode[CRUST_HEADCODE_LENGTH] = '\0';
+
+    (*block)->berthDirection = CRUST_DEFAULT_DIRECTION;
 }
 
 void crust_track_circuit_index_add(CRUST_TRACK_CIRCUIT * trackCircuit, CRUST_STATE * state)
@@ -277,12 +279,18 @@ bool crust_track_circuit_set_occupation(CRUST_TRACK_CIRCUIT * trackCircuit, bool
     return true;
 }
 
-void crust_enable_berth(CRUST_BLOCK * block)
+bool crust_enable_berth(CRUST_BLOCK * block, CRUST_DIRECTION direction)
 {
+    if(block->berth)
+    {
+        return false;
+    }
     block->berth = true;
+    block->berthDirection = direction;
+    return true;
 }
 
-bool crust_interpose(CRUST_BLOCK * block, char * headcode)
+bool crust_interpose(CRUST_BLOCK * block, const char * headcode)
 {
     if(!block->berth)
     {
@@ -296,4 +304,11 @@ bool crust_interpose(CRUST_BLOCK * block, char * headcode)
     block->headcode[CRUST_HEADCODE_LENGTH] = '\0';
 
     return true;
+}
+
+void crust_headcode_auto_advance(CRUST_TRACK_CIRCUIT occupiedTrackCircuit, CRUST_STATE state)
+{
+    // Find the interconnected track circuits
+    // Examine the occupied ones
+    // If only one of the occupied circuits contains a headcode oriented the right way then pull it
 }

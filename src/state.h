@@ -27,17 +27,24 @@
 #define CRUST_TRACK_CIRCUIT struct crustTrackCircuit
 #define CRUST_STATE struct crustState
 #define CRUST_LINK_TYPE enum crustLinkType
+#define CRUST_DIRECTION enum crustDirection
 #define CRUST_INTERPOSE_INSTRUCTION struct crustInterposeInstruction
 #define CRUST_IDENTIFIER u_int32_t
 #define CRUST_MAX_LINKS 4
 #define CRUST_HEADCODE_LENGTH 4
 #define CRUST_EMPTY_BERTH_CHARACTER '_'
+#define CRUST_DEFAULT_DIRECTION UP
 
 enum crustLinkType {
     upMain,
     upBranching,
     downMain,
     downBranching
+};
+
+enum crustDirection {
+    UP,
+    DOWN
 };
 
 struct crustBlock {
@@ -47,6 +54,7 @@ struct crustBlock {
     CRUST_TRACK_CIRCUIT * trackCircuit;
     bool berth;
     char headcode[CRUST_HEADCODE_LENGTH + 1]; // +1 for trailing null
+    CRUST_DIRECTION berthDirection;
 };
 
 struct crustTrackCircuit {
@@ -79,7 +87,7 @@ void crust_track_circuit_init(CRUST_TRACK_CIRCUIT ** trackCircuit, CRUST_STATE *
 int crust_block_insert(CRUST_BLOCK * block, CRUST_STATE * state);
 int crust_track_circuit_insert(CRUST_TRACK_CIRCUIT * trackCircuit, CRUST_STATE * state);
 bool crust_track_circuit_set_occupation(CRUST_TRACK_CIRCUIT * trackCircuit, bool occupied, CRUST_STATE * state);
-void crust_enable_berth(CRUST_BLOCK * block);
-bool crust_interpose(CRUST_BLOCK * block, char * headcode);
+bool crust_enable_berth(CRUST_BLOCK * block, CRUST_DIRECTION direction);
+bool crust_interpose(CRUST_BLOCK * block, const char * headcode);
 
 #endif //CRUST_STATE_H

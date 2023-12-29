@@ -308,6 +308,14 @@ size_t crust_print_block(CRUST_BLOCK * block, char ** outBuffer)
     if(block->berth)
     {
         crust_dynamic_print_buffer_cat(&dynamicBuffer, "/");
+        if(block->berthDirection == UP)
+        {
+            crust_dynamic_print_buffer_cat(&dynamicBuffer, "U");
+        }
+        else if(block->berthDirection == DOWN)
+        {
+            crust_dynamic_print_buffer_cat(&dynamicBuffer, "D");
+        }
         crust_dynamic_print_buffer_cat(&dynamicBuffer, block->headcode);
     }
 

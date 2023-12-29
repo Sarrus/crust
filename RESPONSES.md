@@ -5,16 +5,25 @@ These are the outputs that the CRUST daemon can provide.
 ## BLock
 ```
 BL[block number][link designator][link number]:[friendly name]
+BL[block number][link designator][link number]/[berth direction][headcode]:[friendly name]
 ```
 A block can have up to four link designators and link numbers.
 
-### Example
+If the link designators are followed by a `/` then the block is 
+also a berth. 
+
+### Examples
 ```
 BL2UM1DM0:HX15
 ```
 Block number 2 has it's up main connected to block 1, it's 
 down main connected to block 0 and the friendly name 'HX15'
-
+```
+BL3DM2/D1B22:HX16
+```
+Block number 3 has it's up main connected to block 2, it is
+a down berth, holds the headcode '1B22' and has the friendly 
+name 'HX16'
 ## Track Circuit
 ```
 TC[track circuit number]:[block number]/[block number][occupation state]
