@@ -94,5 +94,6 @@ int crust_track_circuit_insert(CRUST_TRACK_CIRCUIT * trackCircuit, CRUST_STATE *
 bool crust_track_circuit_set_occupation(CRUST_TRACK_CIRCUIT * trackCircuit, bool occupied, CRUST_STATE * state);
 bool crust_enable_berth(CRUST_BLOCK * block, CRUST_DIRECTION direction);
 bool crust_interpose(CRUST_BLOCK * block, const char * headcode);
+void crust_headcode_auto_advance(CRUST_TRACK_CIRCUIT * occupiedTrackCircuit, CRUST_STATE * state);
 
 #endif //CRUST_STATE_H

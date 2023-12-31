@@ -223,6 +223,8 @@ int crust_track_circuit_insert(CRUST_TRACK_CIRCUIT * trackCircuit, CRUST_STATE *
     for(u_int32_t blockInCircuit = 0; blockInCircuit < trackCircuit->numBlocks; blockInCircuit++)
     {
         bool linkedToCircuit = false;
+        bool upEdgeBlock = false;
+        bool downEdgeBlock = false;
         for(int link = 0; link < CRUST_MAX_LINKS; link++)
         {
             if(trackCircuit->blocks[blockInCircuit]->links[link] != NULL)
@@ -238,8 +240,9 @@ int crust_track_circuit_insert(CRUST_TRACK_CIRCUIT * trackCircuit, CRUST_STATE *
                 }
                 if(!linkMatchFound)
                 {
-                    if(link == upMain
-                            || link == upBranching)
+                    if(!upEdgeBlock
+                    && (link == upMain
+                            || link == upBranching))
                     {
                         (trackCircuit->numUpEdgeBlocks)++;
                         trackCircuit->upEdgeBlocks = realloc(trackCircuit->upEdgeBlocks, sizeof(CRUST_BLOCK *) * trackCircuit->numUpEdgeBlocks);
@@ -249,9 +252,11 @@ int crust_track_circuit_insert(CRUST_TRACK_CIRCUIT * trackCircuit, CRUST_STATE *
                             exit(EXIT_FAILURE);
                         }
                         trackCircuit->upEdgeBlocks[trackCircuit->numUpEdgeBlocks - 1] = trackCircuit->blocks[blockInCircuit];
+                        upEdgeBlock = true;
                     }
-                    else if(link == downMain
-                            || link == downBranching)
+                    else if(!downEdgeBlock
+                    && (link == downMain
+                            || link == downBranching))
                     {
                         (trackCircuit->numDownEdgeBlocks)++;
                         trackCircuit->downEdgeBlocks = realloc(trackCircuit->downEdgeBlocks, sizeof(CRUST_BLOCK *) * trackCircuit->numDownEdgeBlocks);
@@ -261,6 +266,7 @@ int crust_track_circuit_insert(CRUST_TRACK_CIRCUIT * trackCircuit, CRUST_STATE *
                             exit(EXIT_FAILURE);
                         }
                         trackCircuit->downEdgeBlocks[trackCircuit->numDownEdgeBlocks - 1] = trackCircuit->blocks[blockInCircuit];
+                        downEdgeBlock = true;
                     }
                 }
             }
@@ -378,9 +384,118 @@ bool crust_interpose(CRUST_BLOCK * block, const char * headcode)
     return true;
 }
 
-void crust_headcode_auto_advance(CRUST_TRACK_CIRCUIT occupiedTrackCircuit, CRUST_STATE state)
+void crust_headcode_auto_advance(CRUST_TRACK_CIRCUIT * occupiedTrackCircuit, CRUST_STATE * state)
 {
+    CRUST_BLOCK * foundHeadcode = NULL;
     // Find the interconnected track circuits
     // Examine the occupied ones
     // If only one of the occupied circuits contains a headcode oriented the right way then pull it
+    for(int i = 0; i < occupiedTrackCircuit->numUpEdgeBlocks; i++)
+    {
+        if(occupiedTrackCircuit->upEdgeBlocks[i]->links[upMain] != NULL
+            && occupiedTrackCircuit->upEdgeBlocks[i]->links[upMain]->trackCircuit != NULL
+            && occupiedTrackCircuit->upEdgeBlocks[i]->links[upMain]->trackCircuit->occupied == true
+            && occupiedTrackCircuit->upEdgeBlocks[i]->links[upMain]->berth == true
+            && occupiedTrackCircuit->upEdgeBlocks[i]->links[upMain]->berthDirection == DOWN
+            && occupiedTrackCircuit->upEdgeBlocks[i]->links[upMain]->headcode[0] != '_')
+        {
+            if(foundHeadcode != NULL)
+            {
+                // Two headcodes found
+                return;
+            }
+            foundHeadcode = occupiedTrackCircuit->upEdgeBlocks[i]->links[upMain];
+        }
+
+        if(occupiedTrackCircuit->upEdgeBlocks[i]->links[upBranching] != NULL
+            && occupiedTrackCircuit->upEdgeBlocks[i]->links[upBranching]->trackCircuit != NULL
+            && occupiedTrackCircuit->upEdgeBlocks[i]->links[upBranching]->trackCircuit->occupied == true
+            && occupiedTrackCircuit->upEdgeBlocks[i]->links[upBranching]->berth == true
+            && occupiedTrackCircuit->upEdgeBlocks[i]->links[upBranching]->berthDirection == DOWN
+            && occupiedTrackCircuit->upEdgeBlocks[i]->links[upBranching]->headcode[0] != '_')
+        {
+            if(foundHeadcode != NULL)
+            {
+                // Two headcodes found
+                return;
+            }
+            foundHeadcode = occupiedTrackCircuit->upEdgeBlocks[i]->links[upBranching];
+        }
+    }
+
+    for(int i = 0; i < occupiedTrackCircuit->numDownEdgeBlocks; i++)
+    {
+        if(occupiedTrackCircuit->downEdgeBlocks[i]->links[downMain] != NULL
+           && occupiedTrackCircuit->downEdgeBlocks[i]->links[downMain]->trackCircuit != NULL
+           && occupiedTrackCircuit->downEdgeBlocks[i]->links[downMain]->trackCircuit->occupied == true
+           && occupiedTrackCircuit->downEdgeBlocks[i]->links[downMain]->berth == true
+           && occupiedTrackCircuit->downEdgeBlocks[i]->links[downMain]->berthDirection == UP
+           && occupiedTrackCircuit->downEdgeBlocks[i]->links[downMain]->headcode[0] != '_')
+        {
+            if(foundHeadcode != NULL)
+            {
+                // Two headcodes found
+                return;
+            }
+            foundHeadcode = occupiedTrackCircuit->downEdgeBlocks[i]->links[downMain];
+        }
+
+        if(occupiedTrackCircuit->downEdgeBlocks[i]->links[downBranching] != NULL
+           && occupiedTrackCircuit->downEdgeBlocks[i]->links[downBranching]->trackCircuit != NULL
+           && occupiedTrackCircuit->downEdgeBlocks[i]->links[downBranching]->trackCircuit->occupied == true
+           && occupiedTrackCircuit->downEdgeBlocks[i]->links[downBranching]->berth == true
+           && occupiedTrackCircuit->downEdgeBlocks[i]->links[downBranching]->berthDirection == UP
+           && occupiedTrackCircuit->downEdgeBlocks[i]->links[downBranching]->headcode[0] != '_')
+        {
+            if(foundHeadcode != NULL)
+            {
+                // Two headcodes found
+                return;
+            }
+            foundHeadcode = occupiedTrackCircuit->downEdgeBlocks[i]->links[downBranching];
+        }
+    }
+
+    if(foundHeadcode == NULL)
+    {
+        return;
+    }
+    else if(foundHeadcode->berthDirection == UP)
+    {
+        for(int i = 0; i < occupiedTrackCircuit->numUpEdgeBlocks; i++)
+        {
+            if(occupiedTrackCircuit->upEdgeBlocks[i]->berth == true
+                && occupiedTrackCircuit->upEdgeBlocks[i]->berthDirection == UP)
+            {
+                if(occupiedTrackCircuit->upEdgeBlocks[i]->headcode[0] == '_')
+                {
+                    for(int j = 0; j < CRUST_HEADCODE_LENGTH; j++)
+                    {
+                        occupiedTrackCircuit->upEdgeBlocks[i]->headcode[j] = foundHeadcode->headcode[j];
+                        foundHeadcode->headcode[j] = '_';
+                    }
+                }
+                return;
+            }
+        }
+    }
+    else if(foundHeadcode->berthDirection == DOWN)
+    {
+        for(int i = 0; i < occupiedTrackCircuit->numDownEdgeBlocks; i++)
+        {
+            if(occupiedTrackCircuit->downEdgeBlocks[i]->berth == true
+               && occupiedTrackCircuit->downEdgeBlocks[i]->berthDirection == DOWN)
+            {
+                if(occupiedTrackCircuit->downEdgeBlocks[i]->headcode[0] == '_')
+                {
+                    for(int j = 0; j < CRUST_HEADCODE_LENGTH; j++)
+                    {
+                        occupiedTrackCircuit->downEdgeBlocks[i]->headcode[j] = foundHeadcode->headcode[j];
+                        foundHeadcode->headcode[j] = '_';
+                    }
+                }
+                return;
+            }
+        }
+    }
 }

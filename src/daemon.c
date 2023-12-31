@@ -513,6 +513,7 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
                 write->targets = 0;
                 write->bufferLength = crust_print_track_circuit(identifiedTrackCircuit, &write->writeBuffer);
                 crust_write_to_listeners(pollList, bufferList, listLength, write);
+                crust_headcode_auto_advance(identifiedTrackCircuit, state);
             }
             break;
 
