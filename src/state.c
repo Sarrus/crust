@@ -157,6 +157,11 @@ void crust_track_circuit_init(CRUST_TRACK_CIRCUIT ** trackCircuit, CRUST_STATE *
  * */
 int crust_block_insert(CRUST_BLOCK * block, CRUST_STATE * state)
 {
+    if(state->circuitsInserted)
+    {
+        return 4;
+    }
+
     unsigned int linkCount = 0;
     for(int i = 0; i < CRUST_MAX_LINKS; i++)
     {
@@ -280,6 +285,9 @@ int crust_track_circuit_insert(CRUST_TRACK_CIRCUIT * trackCircuit, CRUST_STATE *
     // Add the track circuit to the index
     crust_track_circuit_index_add(trackCircuit, state);
 
+    // Record that we have started inserting circuits
+    state->circuitsInserted = true;
+
     return 0;
 }
 
@@ -298,6 +306,7 @@ void crust_state_init(CRUST_STATE ** state)
     (*state)->trackCircuitIndexPointer = 0;
     crust_block_init(&(*state)->initialBlock, *state);
     crust_block_index_add((*state)->initialBlock, *state);
+    (*state)->circuitsInserted = false;
 }
 
 /*

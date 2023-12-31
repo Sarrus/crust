@@ -419,6 +419,15 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
                     }
                     free(operationInput->block);
                     break;
+
+                case 4:
+                    crust_terminal_print_verbose("Cannot insert more blocks after track circuits have been inserted");
+                    if(operationInput->block->blockName != NULL)
+                    {
+                        free(operationInput->block->blockName);
+                    }
+                    free(operationInput->block);
+                    break;
             }
             break;
 
@@ -445,6 +454,11 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
                     free(operationInput->trackCircuit->blocks);
                     free(operationInput->trackCircuit);
                     break;
+
+                case 3:
+                    crust_terminal_print_verbose("Failed to insert track circuit - not all blocks are connected together");
+                    free(operationInput->trackCircuit->blocks);
+                    free(operationInput->trackCircuit);
             }
             break;
 

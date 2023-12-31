@@ -76,6 +76,7 @@ struct crustState {
     CRUST_TRACK_CIRCUIT ** trackCircuitIndex;
     unsigned int trackCircuitIndexLength;
     unsigned int trackCircuitIndexPointer;
+    bool circuitsInserted;
 };
 
 struct crustInterposeInstruction{
