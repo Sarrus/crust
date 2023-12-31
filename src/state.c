@@ -142,6 +142,10 @@ void crust_track_circuit_init(CRUST_TRACK_CIRCUIT ** trackCircuit, CRUST_STATE *
     (*trackCircuit)->blocks = NULL;
     (*trackCircuit)->numBlocks = 0;
     (*trackCircuit)->occupied = true; // Track circuits always start out occupied
+    (*trackCircuit)->upEdgeBlocks = NULL;
+    (*trackCircuit)->numUpEdgeBlocks = 0;
+    (*trackCircuit)->downEdgeBlocks = NULL;
+    (*trackCircuit)->numDownEdgeBlocks = 0;
 }
 
 /*
@@ -206,6 +210,65 @@ int crust_track_circuit_insert(CRUST_TRACK_CIRCUIT * trackCircuit, CRUST_STATE *
         if(trackCircuit->blocks[i]->trackCircuit != NULL)
         {
             return 2;
+        }
+    }
+
+    // Check that the referenced blocks are all connected together and find the
+    // edge blocks
+    for(u_int32_t blockInCircuit = 0; blockInCircuit < trackCircuit->numBlocks; blockInCircuit++)
+    {
+        bool linkedToCircuit = false;
+        for(int link = 0; link < CRUST_MAX_LINKS; link++)
+        {
+            if(trackCircuit->blocks[blockInCircuit]->links[link] != NULL)
+            {
+                bool linkMatchFound = false;
+                for(u_int32_t otherBlockInCircuit = 0; otherBlockInCircuit < trackCircuit->numBlocks; otherBlockInCircuit++)
+                {
+                    if(trackCircuit->blocks[blockInCircuit]->links[link] == trackCircuit->blocks[otherBlockInCircuit])
+                    {
+                        linkedToCircuit = true;
+                        linkMatchFound = true;
+                    }
+                }
+                if(!linkMatchFound)
+                {
+                    if(link == upMain
+                            || link == upBranching)
+                    {
+                        (trackCircuit->numUpEdgeBlocks)++;
+                        trackCircuit->upEdgeBlocks = realloc(trackCircuit->upEdgeBlocks, sizeof(CRUST_BLOCK *) * trackCircuit->numUpEdgeBlocks);
+                        if(trackCircuit->upEdgeBlocks == NULL)
+                        {
+                            crust_terminal_print("Memory allocation error.");
+                            exit(EXIT_FAILURE);
+                        }
+                        trackCircuit->upEdgeBlocks[trackCircuit->numUpEdgeBlocks - 1] = trackCircuit->blocks[blockInCircuit];
+                    }
+                    else if(link == downMain
+                            || link == downBranching)
+                    {
+                        (trackCircuit->numDownEdgeBlocks)++;
+                        trackCircuit->downEdgeBlocks = realloc(trackCircuit->downEdgeBlocks, sizeof(CRUST_BLOCK *) * trackCircuit->numDownEdgeBlocks);
+                        if(trackCircuit->downEdgeBlocks == NULL)
+                        {
+                            crust_terminal_print("Memory allocation error.");
+                            exit(EXIT_FAILURE);
+                        }
+                        trackCircuit->downEdgeBlocks[trackCircuit->numDownEdgeBlocks - 1] = trackCircuit->blocks[blockInCircuit];
+                    }
+                }
+            }
+        }
+        if(trackCircuit->numBlocks != 1 && !linkedToCircuit)
+        {
+            free(trackCircuit->upEdgeBlocks);
+            trackCircuit->upEdgeBlocks = NULL;
+            trackCircuit->numUpEdgeBlocks = 0;
+            free(trackCircuit->downEdgeBlocks);
+            trackCircuit->downEdgeBlocks = NULL;
+            trackCircuit->numDownEdgeBlocks = 0;
+            return 3;
         }
     }
 

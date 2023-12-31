@@ -61,6 +61,10 @@ struct crustTrackCircuit {
     CRUST_IDENTIFIER trackCircuitId;
     CRUST_BLOCK ** blocks;
     CRUST_IDENTIFIER numBlocks;
+    CRUST_BLOCK ** upEdgeBlocks;
+    CRUST_IDENTIFIER numUpEdgeBlocks;
+    CRUST_BLOCK ** downEdgeBlocks;
+    CRUST_IDENTIFIER numDownEdgeBlocks;
     bool occupied;
 };
 
