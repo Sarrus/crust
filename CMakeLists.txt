@@ -5,7 +5,7 @@ set(CMAKE_C_STANDARD 99)
 
 add_subdirectory(src)
 
-#target_link_libraries(crust curses)
+target_link_libraries(crust curses)
 
 if(APPLE)
     target_compile_definitions(crust PRIVATE MACOS)
