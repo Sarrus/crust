@@ -33,7 +33,7 @@
 #include "daemon.h"
 #include "options.h"
 #include "terminal.h"
-//#include "window.h"
+#include "window.h"
 #ifdef GPIO
 #include "node.h"
 #endif
@@ -51,7 +51,7 @@ bool crustOptionSetGroup = false;
 gid_t crustOptionTargetGroup;
 in_port_t crustOptionPort = CRUST_DEFAULT_PORT;
 in_addr_t crustOptionIPAddress = CRUST_DEFAULT_IP_ADDRESS;
-// bool crustOptionWindowEnterLog = false;
+bool crustOptionWindowEnterLog = false;
 
 #ifdef GPIO
 char crustOptionGPIOPath[PATH_MAX];
@@ -119,7 +119,7 @@ int main(int argc, char ** argv) {
                 crust_terminal_print("  -h  Display this help.");
                 crust_terminal_print("  -i  Invert the logic of the GPIO pins. "
                                      "(High = clear instead of high = occupied.)");
-                // crust_terminal_print("  -l  If running in window mode, start into the log screen.");
+                crust_terminal_print("  -l  If running in window mode, start into the log screen.");
                 crust_terminal_print("  -m  Specify track circuit to GPIO mapping in the format "
                                      "pin_number:circuit_number,[...]");
                 crust_terminal_print("  -n  Run in node mode. Takes the path to a GPIO chip as an argument.");
@@ -128,7 +128,7 @@ int main(int argc, char ** argv) {
                 crust_terminal_print("  -u  Switch to this user after completing setup. "
                                      "(Only works if starting as root.)");
                 crust_terminal_print("  -v  Display verbose output.");
-                // crust_terminal_print("  -w  Run in window mode. (Show a live view of the line.)");
+                crust_terminal_print("  -w  Run in window mode. (Show a live view of the line.)");
                 exit(EXIT_SUCCESS);
 
 #ifdef GPIO
@@ -137,8 +137,8 @@ int main(int argc, char ** argv) {
                 break;
 #endif
 
-//            case 'l':
-//                crustOptionWindowEnterLog = true;
+            case 'l':
+                crustOptionWindowEnterLog = true;
 
             case 'm':
 #ifdef GPIO
@@ -203,9 +203,9 @@ int main(int argc, char ** argv) {
                 crustOptionVerbose = true;
                 break;
 
-//            case 'w':
-//                crustOptionRunMode = CRUST_RUN_MODE_WINDOW;
-//                break;
+            case 'w':
+                crustOptionRunMode = CRUST_RUN_MODE_WINDOW;
+                break;
 
             case '?':
             default:
@@ -227,8 +227,8 @@ int main(int argc, char ** argv) {
             crust_node_run();
 #endif
 
-//        case CRUST_RUN_MODE_WINDOW:
-//            crust_window_run();
+        case CRUST_RUN_MODE_WINDOW:
+            crust_window_run();
     }
 
     return EXIT_SUCCESS;

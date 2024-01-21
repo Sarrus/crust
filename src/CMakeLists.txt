@@ -1,4 +1,13 @@
-add_executable(crust main.c daemon.c terminal.c state.c messaging.c client.c client.h)
+add_executable(crust
+        main.c
+        daemon.c
+        terminal.c
+        state.c
+        messaging.c
+        window.c
+        window.h
+        client.c
+        client.h)
 
 if(WITH_GPIO)
     target_compile_definitions(crust PRIVATE GPIO)
