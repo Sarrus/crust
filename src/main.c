@@ -52,6 +52,7 @@ gid_t crustOptionTargetGroup;
 in_port_t crustOptionPort = CRUST_DEFAULT_PORT;
 in_addr_t crustOptionIPAddress = CRUST_DEFAULT_IP_ADDRESS;
 bool crustOptionWindowEnterLog = false;
+char crustOptionWindowConfigFilePath[PATH_MAX];
 
 #ifdef GPIO
 char crustOptionGPIOPath[PATH_MAX];
@@ -80,7 +81,7 @@ int main(int argc, char ** argv) {
 
     opterr = true;
     int option;
-    while((option = getopt(argc, argv, "a:dg:hilm:n:p:r:u:vw")) != -1)
+    while((option = getopt(argc, argv, "a:dg:hilm:n:p:r:u:vw:")) != -1)
     {
         switch(option)
         {
@@ -128,7 +129,8 @@ int main(int argc, char ** argv) {
                 crust_terminal_print("  -u  Switch to this user after completing setup. "
                                      "(Only works if starting as root.)");
                 crust_terminal_print("  -v  Display verbose output.");
-                crust_terminal_print("  -w  Run in window mode. (Show a live view of the line.)");
+                crust_terminal_print("  -w  Run in window mode. (Show a live view of the line.) Takes the "
+                                     "path of a window layout file as an argument.");
                 exit(EXIT_SUCCESS);
 
 #ifdef GPIO
@@ -205,6 +207,8 @@ int main(int argc, char ** argv) {
 
             case 'w':
                 crustOptionRunMode = CRUST_RUN_MODE_WINDOW;
+                strncpy(crustOptionWindowConfigFilePath, optarg, PATH_MAX);
+                crustOptionWindowConfigFilePath[PATH_MAX - 1] = '\0';
                 break;
 
             case '?':

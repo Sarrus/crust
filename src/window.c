@@ -25,6 +25,7 @@
 #include <signal.h>
 #include <poll.h>
 #include <string.h>
+#include <errno.h>
 #include "window.h"
 #include "terminal.h"
 #include "state.h"
@@ -47,12 +48,15 @@ enum crustWindowMode {
 
 struct crustLineMapEntry {
     char character;
-    int xPos;
-    int yPos;
+    unsigned long xPos;
+    unsigned long yPos;
 };
 
 #define CRUST_LINE_MAP_ENTRY struct crustLineMapEntry
 #define CRUST_WALK_MEMORY_INCREMENT 100
+
+CRUST_LINE_MAP_ENTRY * lineMap = NULL;
+unsigned int lineMapLength = 0;
 
 _Noreturn void crust_window_stop()
 {
@@ -63,6 +67,84 @@ _Noreturn void crust_window_stop()
 void crust_window_handle_signal(int signal)
 {
     crust_window_stop();
+}
+
+void crust_window_load_layout()
+{
+    FILE * layoutFile = fopen(crustOptionWindowConfigFilePath, "r");
+    if(layoutFile == NULL)
+    {
+        crust_terminal_print("Unable to open layout file.");
+        exit(EXIT_FAILURE);
+    }
+
+    char * line = NULL;
+    char * lineNextSegment = NULL;
+    char * intConvEndPos = NULL;
+    size_t linecap = 0;
+    ssize_t linelen;
+
+    while((linelen = getline(&line, &linecap, layoutFile)) != -1)
+    {
+        if(line[0] != '#' && line[0] != '\r' && line[0] != '\n')
+        {
+            lineMapLength++;
+            lineMap = realloc(lineMap, sizeof(CRUST_LINE_MAP_ENTRY) * lineMapLength);
+            if(lineMap == NULL)
+            {
+                crust_terminal_print("Memory allocation failure");
+                exit(EXIT_FAILURE);
+            }
+            lineNextSegment = line;
+            for(int i = 0; i < 3; i++)
+            {
+                line = strsep(&lineNextSegment, ",\r\n");
+                if(line == NULL)
+                {
+                    crust_terminal_print("Invalid line in mapping file");
+                    exit(EXIT_FAILURE);
+                }
+                switch(i)
+                {
+                    case 0:
+                        errno = 0;
+                        lineMap[lineMapLength - 1].xPos = strtoul(line, &intConvEndPos, 10);
+                        if(errno
+                            || *intConvEndPos != '\0'
+                            || intConvEndPos == line)
+                        {
+                            crust_terminal_print("Invalid line in mapping file");
+                            exit(EXIT_FAILURE);
+                        }
+                        break;
+
+                    case 1:
+                        errno = 0;
+                        lineMap[lineMapLength - 1].yPos = strtoul(line, &intConvEndPos, 10);
+                        if(errno
+                           || *intConvEndPos != '\0'
+                           || intConvEndPos == line)
+                        {
+                            crust_terminal_print("Invalid line in mapping file");
+                            exit(EXIT_FAILURE);
+                        }
+                        break;
+
+                    case 2:
+                        if(strlen(line) != 1)
+                        {
+                            crust_terminal_print("Invalid line in mapping file");
+                            exit(EXIT_FAILURE);
+                        }
+                        lineMap[lineMapLength - 1].character = line[0];
+                        break;
+
+                    default:
+                        break;
+                }
+            }
+        }
+    }
 }
 
 bool crust_window_harvest_remote_id(char ** message, CRUST_IDENTIFIER * remoteID)
@@ -386,6 +468,9 @@ _Noreturn void crust_window_run()
     // Register the signal handlers
     signal(SIGINT, crust_window_handle_signal);
     signal(SIGTERM, crust_window_handle_signal);
+
+    // Load the layout file
+    crust_window_load_layout();
 
     // Poll stdin for user input
     pollList[0].fd = STDIN_FILENO;
