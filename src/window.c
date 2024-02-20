@@ -265,7 +265,7 @@ void crust_window_refresh_screen()
     clear();
     for(int i = 0; i < lineMapLength; i++)
     {
-        move(lineMap[i].xPos, lineMap[i].yPos);
+        move(lineMap[i].yPos, lineMap[i].xPos);
         addch(lineMap[i].character);
     }
 }
