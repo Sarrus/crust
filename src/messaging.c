@@ -351,11 +351,11 @@ size_t crust_print_track_circuit(CRUST_TRACK_CIRCUIT * trackCircuit, char ** out
 
     if(trackCircuit->occupied)
     {
-        crust_dynamic_print_buffer_cat(&dynamicBuffer, "OC\r\n");
+        crust_dynamic_print_buffer_cat(&dynamicBuffer, "OC\n");
     }
     else
     {
-        crust_dynamic_print_buffer_cat(&dynamicBuffer, "CL\r\n");
+        crust_dynamic_print_buffer_cat(&dynamicBuffer, "CL\n");
     }
 
     *outBuffer = dynamicBuffer->buffer;
