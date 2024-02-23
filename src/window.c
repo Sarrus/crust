@@ -45,11 +45,19 @@ struct crustLineMapEntry {
     char character;
     unsigned long xPos;
     unsigned long yPos;
+    long trackCircuitNumber;
+    bool occupied;
 };
 
 #define CRUST_LINE_MAP_ENTRY struct crustLineMapEntry
 CRUST_LINE_MAP_ENTRY * lineMap = NULL;
 unsigned int lineMapLength = 0;
+
+#define CRUST_COLOUR_GREY 8
+
+#define CRUST_COLOUR_PAIR_DEFAULT 1
+#define CRUST_COLOUR_PAIR_CLEAR 2
+#define CRUST_COLOUR_PAIR_OCCUPIED 3
 
 _Noreturn void crust_window_stop()
 {
@@ -88,11 +96,14 @@ void crust_window_load_layout()
                 crust_terminal_print("Memory allocation failure");
                 exit(EXIT_FAILURE);
             }
+
+            lineMap[lineMapLength -1].occupied = false;
+
             lineNextSegment = line;
-            for(int i = 0; i < 3; i++)
+            for(int i = 0; i < 4; i++)
             {
                 line = strsep(&lineNextSegment, ",\r\n");
-                if(line == NULL)
+                if(line == NULL && i < 3)
                 {
                     crust_terminal_print("Invalid line in mapping file");
                     exit(EXIT_FAILURE);
@@ -132,10 +143,32 @@ void crust_window_load_layout()
                         lineMap[lineMapLength - 1].character = line[0];
                         break;
 
+                    case 3:
+                        errno = 0;
+                        lineMap[lineMapLength - 1].trackCircuitNumber = (long)strtoul(line, &intConvEndPos, 10);
+                        if(errno
+                           || *intConvEndPos != '\0'
+                           || intConvEndPos == line)
+                        {
+                            lineMap[lineMapLength - 1].trackCircuitNumber = -1;
+                        }
+                        break;
+
                     default:
                         break;
                 }
             }
+        }
+    }
+}
+
+void crust_window_set_occupation(CRUST_IDENTIFIER trackCircuitID, bool occupation)
+{
+    for(int i = 0; i < lineMapLength; i++)
+    {
+        if(lineMap[i].trackCircuitNumber == trackCircuitID)
+        {
+            lineMap[i].occupied = occupation;
         }
     }
 }
@@ -156,12 +189,11 @@ bool crust_window_harvest_remote_id(char ** message, CRUST_IDENTIFIER * remoteID
     }
 }
 
-CRUST_OPCODE crust_window_interpret_message(char * message, CRUST_MIXED_OPERATION_INPUT * operationInput,
-                                            CRUST_STATE * state,
-                                            CRUST_IDENTIFIER * remoteID)
+CRUST_OPCODE crust_window_interpret_message(char * message, CRUST_IDENTIFIER * remoteID)
 {
+    size_t length = strlen(message);
     // Return NOP if the message is too short
-    if (strlen(message) < 2)
+    if (length < 4)
     {
         return NO_OPERATION;
     }
@@ -174,27 +206,24 @@ CRUST_OPCODE crust_window_interpret_message(char * message, CRUST_MIXED_OPERATIO
         return NO_OPERATION;
     }
 
-    // Ignore block 0
-    if(*remoteID == 0)
-    {
-        return NO_OPERATION;
-    }
-
     switch(message[0])
     {
-        case 'B':
+        case 'T':
             switch(message[1])
             {
-                case 'L':
-                    // Initialise a block and try to fill it.
-                    crust_block_init(&operationInput->block, state);
-                    if(crust_interpret_block(messageAfterIdentifier, operationInput->block, state))
+                case 'C':
+                    if(message[length - 2] == 'O' && message[length - 1] == 'C')
                     {
-                        crust_terminal_print_verbose("Invalid block description message");
-                        free(operationInput->block);
+                        return OCCUPY_TRACK_CIRCUIT;
+                    }
+                    else if(message[length - 2] == 'C' && message[length - 1] == 'L')
+                    {
+                        return CLEAR_TRACK_CIRCUIT;
+                    }
+                    else
+                    {
                         return NO_OPERATION;
                     }
-                    return INSERT_BLOCK;
 
                 default:
                     return NO_OPERATION;
@@ -220,6 +249,19 @@ void crust_window_enter_mode(CRUST_WINDOW_MODE targetMode)
                 crust_terminal_print("Failed to initialize screen.");
                 exit(EXIT_FAILURE);
             }
+
+            if(has_colors() == FALSE)
+            {
+                crust_terminal_print("Colour support is required.");
+                exit(EXIT_FAILURE);
+            }
+
+            start_color();
+            init_color(COLOR_WHITE, 1000, 1000, 1000);
+            init_color(CRUST_COLOUR_GREY, 800, 800, 800);
+            init_pair(CRUST_COLOUR_PAIR_DEFAULT, CRUST_COLOUR_GREY, COLOR_BLACK);
+            init_pair(CRUST_COLOUR_PAIR_CLEAR, COLOR_WHITE, COLOR_BLACK);
+            init_pair(CRUST_COLOUR_PAIR_OCCUPIED, COLOR_RED, COLOR_BLACK);
 
             addstr("   __________  __  _____________\n"
                    "  / ____/ __ \\/ / / / ___/_  __/\n"
@@ -266,14 +308,38 @@ void crust_window_refresh_screen()
     for(int i = 0; i < lineMapLength; i++)
     {
         move(lineMap[i].yPos, lineMap[i].xPos);
-        addch(lineMap[i].character);
+
+        if(lineMap[i].trackCircuitNumber < 0)
+        {
+            attron(COLOR_PAIR(CRUST_COLOUR_PAIR_DEFAULT));
+            addch(lineMap[i].character);
+            attroff(COLOR_PAIR(CRUST_COLOUR_PAIR_DEFAULT));
+        }
+        else if(lineMap[i].occupied == true)
+        {
+            attron(COLOR_PAIR(CRUST_COLOUR_PAIR_OCCUPIED));
+            attron(A_BOLD);
+            addch(lineMap[i].character);
+            attroff(A_BOLD);
+            attroff(COLOR_PAIR(CRUST_COLOUR_PAIR_OCCUPIED));
+        }
+        else
+        {
+            attron(COLOR_PAIR(CRUST_COLOUR_PAIR_CLEAR));
+            attron(A_BOLD);
+            addch(lineMap[i].character);
+            attroff(A_BOLD);
+            attroff(COLOR_PAIR(CRUST_COLOUR_PAIR_CLEAR));
+        }
     }
+    refresh();
 }
 
 _Noreturn void crust_window_loop(CRUST_STATE * state, struct pollfd * pollList, CRUST_WINDOW_MODE mode)
 {
     char readBuffer[CRUST_MAX_MESSAGE_LENGTH];
     int readPointer = 0;
+    CRUST_IDENTIFIER remoteID = 0;
     for(;;)
     {
         // Poll the server and the keyboard
@@ -300,6 +366,20 @@ _Noreturn void crust_window_loop(CRUST_STATE * state, struct pollfd * pollList, 
             if(readBuffer[readPointer] == '\n')
             {
                 readBuffer[readPointer] = '\0';
+                switch(crust_window_interpret_message(readBuffer, &remoteID))
+                {
+                    case OCCUPY_TRACK_CIRCUIT:
+                        crust_window_set_occupation(remoteID, true);
+                        break;
+
+                    case CLEAR_TRACK_CIRCUIT:
+                        crust_window_set_occupation(remoteID, false);
+                        break;
+
+                    default:
+
+                        break;
+                }
                 if(mode == HOME)
                 {
                     crust_window_refresh_screen();
