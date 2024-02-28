@@ -384,9 +384,10 @@ bool crust_interpose(CRUST_BLOCK * block, const char * headcode)
     return true;
 }
 
-void crust_headcode_auto_advance(CRUST_TRACK_CIRCUIT * occupiedTrackCircuit, CRUST_STATE * state)
+size_t crust_headcode_auto_advance(CRUST_TRACK_CIRCUIT * occupiedTrackCircuit, CRUST_BLOCK *** affectedBlocks, CRUST_STATE * state)
 {
-    CRUST_BLOCK * foundHeadcode = NULL;
+    CRUST_BLOCK * rearBlock = NULL;
+    CRUST_BLOCK * advancedBlock = NULL;
     // Find the interconnected track circuits
     // Examine the occupied ones
     // If only one of the occupied circuits contains a headcode oriented the right way then pull it
@@ -399,12 +400,12 @@ void crust_headcode_auto_advance(CRUST_TRACK_CIRCUIT * occupiedTrackCircuit, CRU
             && occupiedTrackCircuit->upEdgeBlocks[i]->links[upMain]->berthDirection == DOWN
             && occupiedTrackCircuit->upEdgeBlocks[i]->links[upMain]->headcode[0] != '_')
         {
-            if(foundHeadcode != NULL)
+            if(rearBlock != NULL)
             {
                 // Two headcodes found
-                return;
+                return 0;
             }
-            foundHeadcode = occupiedTrackCircuit->upEdgeBlocks[i]->links[upMain];
+            rearBlock = occupiedTrackCircuit->upEdgeBlocks[i]->links[upMain];
         }
 
         if(occupiedTrackCircuit->upEdgeBlocks[i]->links[upBranching] != NULL
@@ -414,12 +415,12 @@ void crust_headcode_auto_advance(CRUST_TRACK_CIRCUIT * occupiedTrackCircuit, CRU
             && occupiedTrackCircuit->upEdgeBlocks[i]->links[upBranching]->berthDirection == DOWN
             && occupiedTrackCircuit->upEdgeBlocks[i]->links[upBranching]->headcode[0] != '_')
         {
-            if(foundHeadcode != NULL)
+            if(rearBlock != NULL)
             {
                 // Two headcodes found
-                return;
+                return 0;
             }
-            foundHeadcode = occupiedTrackCircuit->upEdgeBlocks[i]->links[upBranching];
+            rearBlock = occupiedTrackCircuit->upEdgeBlocks[i]->links[upBranching];
         }
     }
 
@@ -432,12 +433,12 @@ void crust_headcode_auto_advance(CRUST_TRACK_CIRCUIT * occupiedTrackCircuit, CRU
            && occupiedTrackCircuit->downEdgeBlocks[i]->links[downMain]->berthDirection == UP
            && occupiedTrackCircuit->downEdgeBlocks[i]->links[downMain]->headcode[0] != '_')
         {
-            if(foundHeadcode != NULL)
+            if(rearBlock != NULL)
             {
                 // Two headcodes found
-                return;
+                return 0;
             }
-            foundHeadcode = occupiedTrackCircuit->downEdgeBlocks[i]->links[downMain];
+            rearBlock = occupiedTrackCircuit->downEdgeBlocks[i]->links[downMain];
         }
 
         if(occupiedTrackCircuit->downEdgeBlocks[i]->links[downBranching] != NULL
@@ -447,20 +448,20 @@ void crust_headcode_auto_advance(CRUST_TRACK_CIRCUIT * occupiedTrackCircuit, CRU
            && occupiedTrackCircuit->downEdgeBlocks[i]->links[downBranching]->berthDirection == UP
            && occupiedTrackCircuit->downEdgeBlocks[i]->links[downBranching]->headcode[0] != '_')
         {
-            if(foundHeadcode != NULL)
+            if(rearBlock != NULL)
             {
                 // Two headcodes found
-                return;
+                return 0;
             }
-            foundHeadcode = occupiedTrackCircuit->downEdgeBlocks[i]->links[downBranching];
+            rearBlock = occupiedTrackCircuit->downEdgeBlocks[i]->links[downBranching];
         }
     }
 
-    if(foundHeadcode == NULL)
+    if(rearBlock == NULL)
     {
-        return;
+        return 0;
     }
-    else if(foundHeadcode->berthDirection == UP)
+    else if(rearBlock->berthDirection == UP)
     {
         for(int i = 0; i < occupiedTrackCircuit->numUpEdgeBlocks; i++)
         {
@@ -469,17 +470,22 @@ void crust_headcode_auto_advance(CRUST_TRACK_CIRCUIT * occupiedTrackCircuit, CRU
             {
                 if(occupiedTrackCircuit->upEdgeBlocks[i]->headcode[0] == '_')
                 {
+                    advancedBlock = occupiedTrackCircuit->upEdgeBlocks[i];
                     for(int j = 0; j < CRUST_HEADCODE_LENGTH; j++)
                     {
-                        occupiedTrackCircuit->upEdgeBlocks[i]->headcode[j] = foundHeadcode->headcode[j];
-                        foundHeadcode->headcode[j] = '_';
+                        advancedBlock->headcode[j] = rearBlock->headcode[j];
+                        rearBlock->headcode[j] = '_';
                     }
+
+                    *affectedBlocks = malloc(sizeof(CRUST_BLOCK *) * 2);
+                    (*affectedBlocks)[0] = rearBlock;
+                    (*affectedBlocks)[1] = advancedBlock;
+                    return 2;
                 }
-                return;
             }
         }
     }
-    else if(foundHeadcode->berthDirection == DOWN)
+    else if(rearBlock->berthDirection == DOWN)
     {
         for(int i = 0; i < occupiedTrackCircuit->numDownEdgeBlocks; i++)
         {
@@ -488,14 +494,21 @@ void crust_headcode_auto_advance(CRUST_TRACK_CIRCUIT * occupiedTrackCircuit, CRU
             {
                 if(occupiedTrackCircuit->downEdgeBlocks[i]->headcode[0] == '_')
                 {
+                    advancedBlock = occupiedTrackCircuit->upEdgeBlocks[i];
                     for(int j = 0; j < CRUST_HEADCODE_LENGTH; j++)
                     {
-                        occupiedTrackCircuit->downEdgeBlocks[i]->headcode[j] = foundHeadcode->headcode[j];
-                        foundHeadcode->headcode[j] = '_';
+                        advancedBlock->headcode[j] = rearBlock->headcode[j];
+                        rearBlock->headcode[j] = '_';
                     }
+
+                    *affectedBlocks = malloc(sizeof(CRUST_BLOCK *) * 2);
+                    (*affectedBlocks)[0] = rearBlock;
+                    (*affectedBlocks)[1] = advancedBlock;
+                    return 2;
                 }
-                return;
             }
         }
     }
+
+    return 0;
 }

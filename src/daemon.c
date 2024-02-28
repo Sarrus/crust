@@ -375,6 +375,8 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
     CRUST_WRITE * write;
     CRUST_TRACK_CIRCUIT * identifiedTrackCircuit;
     CRUST_BLOCK * identifiedBlock;
+    CRUST_BLOCK ** affectedBlocks = NULL;
+    size_t affectedBlockCount = 0;
 
     // Process the user's operation
     switch(opcode)
@@ -513,7 +515,17 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
                 write->targets = 0;
                 write->bufferLength = crust_print_track_circuit(identifiedTrackCircuit, &write->writeBuffer);
                 crust_write_to_listeners(pollList, bufferList, listLength, write);
-                crust_headcode_auto_advance(identifiedTrackCircuit, state);
+                affectedBlockCount = crust_headcode_auto_advance(identifiedTrackCircuit, &affectedBlocks, state);
+                for(int i = 0; i < affectedBlockCount; i++)
+                {
+                    write = malloc(sizeof(CRUST_WRITE));
+                    write->targets = 0;
+                    write->bufferLength = crust_print_block(affectedBlocks[i], &write->writeBuffer);
+                    crust_write_to_listeners(pollList, bufferList, listLength, write);
+                }
+                free(affectedBlocks);
+                affectedBlocks = NULL;
+                affectedBlockCount = 0;
             }
             break;
 
