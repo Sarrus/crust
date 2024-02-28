@@ -361,7 +361,7 @@ void crust_window_enter_mode(CRUST_WINDOW_MODE targetMode)
             init_pair(CRUST_COLOUR_PAIR_DEFAULT, CRUST_COLOUR_GREY, COLOR_BLACK);
             init_pair(CRUST_COLOUR_PAIR_CLEAR, COLOR_WHITE, COLOR_BLACK);
             init_pair(CRUST_COLOUR_PAIR_OCCUPIED, COLOR_RED, COLOR_BLACK);
-            init_pair(CRUST_COLOUR_PAIR_HEADCODE, COLOR_BLUE, COLOR_BLACK);
+            init_pair(CRUST_COLOUR_PAIR_HEADCODE, COLOR_CYAN, COLOR_BLACK);
 
             addstr("   __________  __  _____________\n"
                    "  / ____/ __ \\/ / / / ___/_  __/\n"
