@@ -26,6 +26,7 @@
 #include <poll.h>
 #include <string.h>
 #include <errno.h>
+#include <regex.h>
 #include "window.h"
 #include "terminal.h"
 #include "state.h"
@@ -47,6 +48,10 @@ struct crustLineMapEntry {
     unsigned long yPos;
     long trackCircuitNumber;
     bool occupied;
+    long berthNumber;
+    long berthCharacterPos;
+    char berthCharacter;
+    bool showBerth;
 };
 
 #define CRUST_LINE_MAP_ENTRY struct crustLineMapEntry
@@ -58,6 +63,10 @@ unsigned int lineMapLength = 0;
 #define CRUST_COLOUR_PAIR_DEFAULT 1
 #define CRUST_COLOUR_PAIR_CLEAR 2
 #define CRUST_COLOUR_PAIR_OCCUPIED 3
+#define CRUST_COLOUR_PAIR_HEADCODE 4
+
+#define CRUST_REGEX_CAPTURE_HEADCODE_FROM_BLOCK "^.*\\/.(.*):.*"
+regex_t regexCaptureHeadcodeFromBlock;
 
 _Noreturn void crust_window_stop()
 {
@@ -68,6 +77,15 @@ _Noreturn void crust_window_stop()
 void crust_window_handle_signal(int signal)
 {
     crust_window_stop();
+}
+
+void crust_window_compile_regexs()
+{
+    if(regcomp(&regexCaptureHeadcodeFromBlock, CRUST_REGEX_CAPTURE_HEADCODE_FROM_BLOCK, REG_EXTENDED))
+    {
+        crust_terminal_print("Error compiling regexes.");
+        exit(EXIT_FAILURE);
+    }
 }
 
 void crust_window_load_layout()
@@ -97,65 +115,99 @@ void crust_window_load_layout()
                 exit(EXIT_FAILURE);
             }
 
+            lineMap[lineMapLength -1].trackCircuitNumber = -1;
             lineMap[lineMapLength -1].occupied = false;
+            lineMap[lineMapLength -1].berthNumber = -1;
+            lineMap[lineMapLength -1].berthCharacterPos = -1;
+            lineMap[lineMapLength -1].berthCharacter = '_';
+            lineMap[lineMapLength -1].showBerth = false;
 
             lineNextSegment = line;
-            for(int i = 0; i < 4; i++)
+            for(int i = 0; i < 6; i++)
             {
                 line = strsep(&lineNextSegment, ",\r\n");
-                if(line == NULL && i < 3)
+                if(line == NULL)
                 {
-                    crust_terminal_print("Invalid line in mapping file");
-                    exit(EXIT_FAILURE);
+                    if(i < 3)
+                    {
+                        crust_terminal_print("Invalid line in mapping file");
+                        exit(EXIT_FAILURE);
+                    }
+
                 }
-                switch(i)
+                else
                 {
-                    case 0:
-                        errno = 0;
-                        lineMap[lineMapLength - 1].xPos = strtoul(line, &intConvEndPos, 10);
-                        if(errno
-                            || *intConvEndPos != '\0'
-                            || intConvEndPos == line)
-                        {
-                            crust_terminal_print("Invalid line in mapping file");
-                            exit(EXIT_FAILURE);
-                        }
-                        break;
+                    switch (i)
+                    {
+                        case 0:
+                            errno = 0;
+                            lineMap[lineMapLength - 1].xPos = strtoul(line, &intConvEndPos, 10);
+                            if (errno
+                                || *intConvEndPos != '\0'
+                                || intConvEndPos == line)
+                            {
+                                crust_terminal_print("Invalid line in mapping file");
+                                exit(EXIT_FAILURE);
+                            }
+                            break;
 
-                    case 1:
-                        errno = 0;
-                        lineMap[lineMapLength - 1].yPos = strtoul(line, &intConvEndPos, 10);
-                        if(errno
-                           || *intConvEndPos != '\0'
-                           || intConvEndPos == line)
-                        {
-                            crust_terminal_print("Invalid line in mapping file");
-                            exit(EXIT_FAILURE);
-                        }
-                        break;
+                        case 1:
+                            errno = 0;
+                            lineMap[lineMapLength - 1].yPos = strtoul(line, &intConvEndPos, 10);
+                            if (errno
+                                || *intConvEndPos != '\0'
+                                || intConvEndPos == line)
+                            {
+                                crust_terminal_print("Invalid line in mapping file");
+                                exit(EXIT_FAILURE);
+                            }
+                            break;
 
-                    case 2:
-                        if(strlen(line) != 1)
-                        {
-                            crust_terminal_print("Invalid line in mapping file");
-                            exit(EXIT_FAILURE);
-                        }
-                        lineMap[lineMapLength - 1].character = line[0];
-                        break;
+                        case 2:
+                            if (strlen(line) != 1)
+                            {
+                                crust_terminal_print("Invalid line in mapping file");
+                                exit(EXIT_FAILURE);
+                            }
+                            lineMap[lineMapLength - 1].character = line[0];
+                            break;
 
-                    case 3:
-                        errno = 0;
-                        lineMap[lineMapLength - 1].trackCircuitNumber = (long)strtoul(line, &intConvEndPos, 10);
-                        if(errno
-                           || *intConvEndPos != '\0'
-                           || intConvEndPos == line)
-                        {
-                            lineMap[lineMapLength - 1].trackCircuitNumber = -1;
-                        }
-                        break;
+                        case 3:
+                            errno = 0;
+                            lineMap[lineMapLength - 1].trackCircuitNumber = (long) strtoul(line, &intConvEndPos, 10);
+                            if (errno
+                                || *intConvEndPos != '\0'
+                                || intConvEndPos == line)
+                            {
+                                lineMap[lineMapLength - 1].trackCircuitNumber = -1;
+                            }
+                            break;
 
-                    default:
-                        break;
+                        case 4:
+                            errno = 0;
+                            lineMap[lineMapLength - 1].berthNumber = (long) strtoul(line, &intConvEndPos, 10);
+                            if (errno
+                                || *intConvEndPos != '\0'
+                                || intConvEndPos == line)
+                            {
+                                lineMap[lineMapLength - 1].berthNumber = -1;
+                            }
+                            break;
+
+                        case 5:
+                            errno = 0;
+                            lineMap[lineMapLength - 1].berthCharacterPos = (long) strtoul(line, &intConvEndPos, 10);
+                            if (errno
+                                || *intConvEndPos != '\0'
+                                || intConvEndPos == line)
+                            {
+                                lineMap[lineMapLength - 1].berthCharacterPos = -1;
+                            }
+                            break;
+
+                        default:
+                            break;
+                    }
                 }
             }
         }
@@ -169,6 +221,30 @@ void crust_window_set_occupation(CRUST_IDENTIFIER trackCircuitID, bool occupatio
         if(lineMap[i].trackCircuitNumber == trackCircuitID)
         {
             lineMap[i].occupied = occupation;
+        }
+    }
+}
+
+void crust_window_update_berth(CRUST_IDENTIFIER blockID, char * headcode)
+{
+    bool allUnderscores = true;
+    size_t headcodeLength = strlen(headcode);
+    for(int i = 0; i < headcodeLength; i++)
+    {
+        if(headcode[i] != '_')
+        {
+            allUnderscores = false;
+        }
+    }
+    for(int i = 0; i < headcodeLength; i++)
+    {
+        for(int j = 0; j < lineMapLength; j++)
+        {
+            if(lineMap[j].berthNumber == blockID && lineMap[j].berthCharacterPos == i)
+            {
+                lineMap[j].berthCharacter = headcode[i];
+                lineMap[j].showBerth = !allUnderscores;
+            }
         }
     }
 }
@@ -189,8 +265,11 @@ bool crust_window_harvest_remote_id(char ** message, CRUST_IDENTIFIER * remoteID
     }
 }
 
-CRUST_OPCODE crust_window_interpret_message(char * message, CRUST_IDENTIFIER * remoteID)
+CRUST_OPCODE crust_window_interpret_message(char * message, CRUST_IDENTIFIER * remoteID, char ** headcode)
 {
+    regmatch_t regexMatches[2];
+    size_t headcodeLength;
+
     size_t length = strlen(message);
     // Return NOP if the message is too short
     if (length < 4)
@@ -208,6 +287,26 @@ CRUST_OPCODE crust_window_interpret_message(char * message, CRUST_IDENTIFIER * r
 
     switch(message[0])
     {
+        case 'B':
+            switch(message[1])
+            {
+                case 'L':
+                    if(regexec(&regexCaptureHeadcodeFromBlock, message, 2, regexMatches, 0)
+                        || !(headcodeLength = regexMatches[1].rm_eo - regexMatches[1].rm_so))
+                    {
+                        return NO_OPERATION;
+                    }
+                    free(*headcode);
+                    *headcode = malloc((sizeof(char) * headcodeLength) + 1);
+                    for(int i = 0; i < headcodeLength; i++)
+                    {
+                        (*headcode)[i] = message[i + regexMatches[1].rm_so];
+                    }
+                    (*headcode)[headcodeLength] = '\0';
+                    return UPDATE_BLOCK;
+                default:
+                    return NO_OPERATION;
+            }
         case 'T':
             switch(message[1])
             {
@@ -262,6 +361,7 @@ void crust_window_enter_mode(CRUST_WINDOW_MODE targetMode)
             init_pair(CRUST_COLOUR_PAIR_DEFAULT, CRUST_COLOUR_GREY, COLOR_BLACK);
             init_pair(CRUST_COLOUR_PAIR_CLEAR, COLOR_WHITE, COLOR_BLACK);
             init_pair(CRUST_COLOUR_PAIR_OCCUPIED, COLOR_RED, COLOR_BLACK);
+            init_pair(CRUST_COLOUR_PAIR_HEADCODE, COLOR_BLUE, COLOR_BLACK);
 
             addstr("   __________  __  _____________\n"
                    "  / ____/ __ \\/ / / / ___/_  __/\n"
@@ -309,7 +409,15 @@ void crust_window_refresh_screen()
     {
         move(lineMap[i].yPos, lineMap[i].xPos);
 
-        if(lineMap[i].trackCircuitNumber < 0)
+        if(lineMap[i].showBerth)
+        {
+            attron(COLOR_PAIR(CRUST_COLOUR_PAIR_HEADCODE));
+            attron(A_BOLD);
+            addch(lineMap[i].berthCharacter);
+            attroff(A_BOLD);
+            attroff(COLOR_PAIR(CRUST_COLOUR_PAIR_HEADCODE));
+        }
+        else if(lineMap[i].trackCircuitNumber < 0)
         {
             attron(COLOR_PAIR(CRUST_COLOUR_PAIR_DEFAULT));
             addch(lineMap[i].character);
@@ -340,6 +448,7 @@ _Noreturn void crust_window_loop(CRUST_STATE * state, struct pollfd * pollList, 
     char readBuffer[CRUST_MAX_MESSAGE_LENGTH];
     int readPointer = 0;
     CRUST_IDENTIFIER remoteID = 0;
+    char * headcode = NULL;
     for(;;)
     {
         // Poll the server and the keyboard
@@ -366,7 +475,7 @@ _Noreturn void crust_window_loop(CRUST_STATE * state, struct pollfd * pollList, 
             if(readBuffer[readPointer] == '\n')
             {
                 readBuffer[readPointer] = '\0';
-                switch(crust_window_interpret_message(readBuffer, &remoteID))
+                switch(crust_window_interpret_message(readBuffer, &remoteID, &headcode))
                 {
                     case OCCUPY_TRACK_CIRCUIT:
                         crust_window_set_occupation(remoteID, true);
@@ -374,6 +483,10 @@ _Noreturn void crust_window_loop(CRUST_STATE * state, struct pollfd * pollList, 
 
                     case CLEAR_TRACK_CIRCUIT:
                         crust_window_set_occupation(remoteID, false);
+                        break;
+
+                    case UPDATE_BLOCK:
+                        crust_window_update_berth(remoteID, headcode);
                         break;
 
                     default:
@@ -410,6 +523,9 @@ _Noreturn void crust_window_loop(CRUST_STATE * state, struct pollfd * pollList, 
 _Noreturn void crust_window_run()
 {
     struct pollfd pollList[2];
+
+    // Compile regexes
+    crust_window_compile_regexs();
 
     // Create an initial state
     CRUST_STATE * state;
