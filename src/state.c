@@ -494,7 +494,7 @@ size_t crust_headcode_auto_advance(CRUST_TRACK_CIRCUIT * occupiedTrackCircuit, C
             {
                 if(occupiedTrackCircuit->downEdgeBlocks[i]->headcode[0] == '_')
                 {
-                    advancedBlock = occupiedTrackCircuit->upEdgeBlocks[i];
+                    advancedBlock = occupiedTrackCircuit->downEdgeBlocks[i];
                     for(int j = 0; j < CRUST_HEADCODE_LENGTH; j++)
                     {
                         advancedBlock->headcode[j] = rearBlock->headcode[j];
