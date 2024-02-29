@@ -33,7 +33,9 @@
 #include "daemon.h"
 #include "options.h"
 #include "terminal.h"
+#ifdef NCURSES
 #include "window.h"
+#endif
 #ifdef GPIO
 #include "node.h"
 #endif
@@ -51,8 +53,11 @@ bool crustOptionSetGroup = false;
 gid_t crustOptionTargetGroup;
 in_port_t crustOptionPort = CRUST_DEFAULT_PORT;
 in_addr_t crustOptionIPAddress = CRUST_DEFAULT_IP_ADDRESS;
+
+#ifdef NCURSES
 bool crustOptionWindowEnterLog = false;
 char crustOptionWindowConfigFilePath[PATH_MAX];
+#endif
 
 #ifdef GPIO
 char crustOptionGPIOPath[PATH_MAX];
@@ -138,10 +143,10 @@ int main(int argc, char ** argv) {
                 crustOptionInvertPinLogic = true;
                 break;
 #endif
-
+#ifdef NCURSES
             case 'l':
                 crustOptionWindowEnterLog = true;
-
+#endif
             case 'm':
 #ifdef GPIO
                 crustOptionPinMapString = optarg;
@@ -206,9 +211,14 @@ int main(int argc, char ** argv) {
                 break;
 
             case 'w':
+#ifdef NCURSES
                 crustOptionRunMode = CRUST_RUN_MODE_WINDOW;
                 strncpy(crustOptionWindowConfigFilePath, optarg, PATH_MAX);
                 crustOptionWindowConfigFilePath[PATH_MAX - 1] = '\0';
+#else
+                crust_terminal_print("CRUST only supports window mode when compiled with WITH_NCURSES set.");
+                exit(EXIT_FAILURE);
+#endif
                 break;
 
             case '?':
@@ -230,9 +240,10 @@ int main(int argc, char ** argv) {
         case CRUST_RUN_MODE_NODE:
             crust_node_run();
 #endif
-
+#ifdef NCURSES
         case CRUST_RUN_MODE_WINDOW:
             crust_window_run();
+#endif
     }
 
     return EXIT_SUCCESS;
