@@ -25,6 +25,7 @@
 #include "terminal.h"
 
 #define CRUST_INDEX_SIZE_INCREMENT 100
+#define CRUST_BLOCK_WALK_DEPTH_LIMIT 10
 
 // Each type of link has an inversion. For example, if downMain of block A points to block B then upMain of block B must
 // point to block A.
@@ -125,6 +126,9 @@ void crust_block_init(CRUST_BLOCK ** block, CRUST_STATE * state)
     (*block)->headcode[CRUST_HEADCODE_LENGTH] = '\0';
 
     (*block)->berthDirection = CRUST_DEFAULT_DIRECTION;
+
+    (*block)->rearBerths = NULL;
+    (*block)->numRearBerths = 0;
 }
 
 void crust_track_circuit_index_add(CRUST_TRACK_CIRCUIT * trackCircuit, CRUST_STATE * state)
@@ -357,7 +361,88 @@ bool crust_track_circuit_set_occupation(CRUST_TRACK_CIRCUIT * trackCircuit, bool
     return true;
 }
 
-bool crust_enable_berth(CRUST_BLOCK * block, CRUST_DIRECTION direction)
+void crust_remap_berths_block_walk(CRUST_BLOCK * block,
+                                   CRUST_DIRECTION direction,
+                                   CRUST_IDENTIFIER * numBlocks,
+                                   CRUST_BLOCK *** foundBlocks,
+                                   CRUST_IDENTIFIER depth)
+{
+    // If we've hit the depth limit do nothing and return
+    if(depth > CRUST_BLOCK_WALK_DEPTH_LIMIT)
+    {
+        return;
+    }
+
+    // If the block is a berth and we are not at the starting block then add it to the list and return
+    if(depth && block->berth && block->berthDirection == direction)
+    {
+        // Check that the block is not already recorded (if there is a loop this will happen)
+        for(CRUST_IDENTIFIER i = 0; i < *numBlocks; i++)
+        {
+            if((*foundBlocks)[i] == block)
+            {
+                return;
+            }
+        }
+        (*numBlocks)++;
+        *foundBlocks = realloc(*foundBlocks, sizeof(CRUST_BLOCK *) * *numBlocks);
+        if(*foundBlocks == NULL)
+        {
+            crust_terminal_print("Memory allocation error");
+            exit(EXIT_FAILURE);
+        }
+        (*foundBlocks)[(*numBlocks) - 1] = block;
+        return;
+    }
+
+    depth++;
+
+    // To calculate the UP rear berths you have to search DOWN
+    switch(direction)
+    {
+        case DOWN:
+            if(block->links[upMain] != NULL)
+            {
+                crust_remap_berths_block_walk(block->links[upMain], direction, numBlocks, foundBlocks, depth);
+            }
+            if(block->links[upBranching] != NULL)
+            {
+                crust_remap_berths_block_walk(block->links[upBranching], direction, numBlocks, foundBlocks, depth);
+            }
+            return;
+
+        case UP:
+            if(block->links[downMain] != NULL)
+            {
+                crust_remap_berths_block_walk(block->links[downMain], direction, numBlocks, foundBlocks, depth);
+            }
+            if(block->links[downBranching] != NULL)
+            {
+                crust_remap_berths_block_walk(block->links[downBranching], direction, numBlocks, foundBlocks, depth);
+            }
+            return;
+    }
+}
+
+void crust_remap_berths(CRUST_DIRECTION direction, CRUST_STATE * state)
+{
+    for(CRUST_IDENTIFIER i = 0; i < state->blockIndexPointer; i++)
+    {
+        if(state->blockIndex[i]->berth && state->blockIndex[i]->berthDirection == direction)
+        {
+            free(state->blockIndex[i]->rearBerths);
+            state->blockIndex[i]->rearBerths = NULL;
+            state->blockIndex[i]->numRearBerths = 0;
+            crust_remap_berths_block_walk(state->blockIndex[i],
+                                          direction,
+                                          &state->blockIndex[i]->numRearBerths,
+                                          &state->blockIndex[i]->rearBerths,
+                                          0);
+        }
+    }
+}
+
+bool crust_enable_berth(CRUST_BLOCK *block, CRUST_DIRECTION direction, CRUST_STATE * state)
 {
     if(block->berth)
     {
@@ -365,6 +450,7 @@ bool crust_enable_berth(CRUST_BLOCK * block, CRUST_DIRECTION direction)
     }
     block->berth = true;
     block->berthDirection = direction;
+    crust_remap_berths(direction, state);
     return true;
 }
 

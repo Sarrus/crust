@@ -532,7 +532,7 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
         case ENABLE_BERTH_UP:
             crust_terminal_print_verbose("OPCODE: Enable Berth UP");
             if(crust_block_get(operationInput->identifier, &identifiedBlock, state)
-                && crust_enable_berth(identifiedBlock, UP))
+                && crust_enable_berth(identifiedBlock, UP, state))
             {
                 write = malloc(sizeof(CRUST_WRITE));
                 write->writeBuffer = malloc(CRUST_MAX_MESSAGE_LENGTH);
@@ -545,7 +545,7 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
         case ENABLE_BERTH_DOWN:
             crust_terminal_print_verbose("OPCODE: Enable Berth DOWN");
             if(crust_block_get(operationInput->identifier, &identifiedBlock, state)
-               && crust_enable_berth(identifiedBlock, DOWN))
+               && crust_enable_berth(identifiedBlock, DOWN, state))
             {
                 write = malloc(sizeof(CRUST_WRITE));
                 write->writeBuffer = malloc(CRUST_MAX_MESSAGE_LENGTH);

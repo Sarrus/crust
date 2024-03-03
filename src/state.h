@@ -55,6 +55,8 @@ struct crustBlock {
     bool berth;
     char headcode[CRUST_HEADCODE_LENGTH + 1]; // +1 for trailing null
     CRUST_DIRECTION berthDirection;
+    CRUST_BLOCK ** rearBerths;
+    CRUST_IDENTIFIER numRearBerths;
 };
 
 struct crustTrackCircuit {
@@ -79,7 +81,7 @@ struct crustState {
     bool circuitsInserted;
 };
 
-struct crustInterposeInstruction{
+struct crustInterposeInstruction {
     CRUST_IDENTIFIER blockID;
     char headcode[CRUST_HEADCODE_LENGTH + 1];
 };
@@ -92,7 +94,7 @@ void crust_track_circuit_init(CRUST_TRACK_CIRCUIT ** trackCircuit, CRUST_STATE *
 int crust_block_insert(CRUST_BLOCK * block, CRUST_STATE * state);
 int crust_track_circuit_insert(CRUST_TRACK_CIRCUIT * trackCircuit, CRUST_STATE * state);
 bool crust_track_circuit_set_occupation(CRUST_TRACK_CIRCUIT * trackCircuit, bool occupied, CRUST_STATE * state);
-bool crust_enable_berth(CRUST_BLOCK * block, CRUST_DIRECTION direction);
+bool crust_enable_berth(CRUST_BLOCK *block, CRUST_DIRECTION direction, CRUST_STATE * state);
 bool crust_interpose(CRUST_BLOCK * block, const char * headcode);
 size_t crust_headcode_auto_advance(CRUST_TRACK_CIRCUIT * occupiedTrackCircuit, CRUST_BLOCK *** affectedBlocks, CRUST_STATE * state);
 
