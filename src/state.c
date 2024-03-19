@@ -131,6 +131,28 @@ void crust_block_init(CRUST_BLOCK ** block, CRUST_STATE * state)
     (*block)->numRearBerths = 0;
 }
 
+void crust_path_init(CRUST_PATH ** path)
+{
+    *path = malloc(sizeof(CRUST_PATH));
+    if(*path == NULL)
+    {
+        crust_terminal_print("Memory allocation error");
+        exit(EXIT_FAILURE);
+    }
+    (*path)->linkedBlocks = NULL;
+    (*path)->numLinkedBlocks = 0;
+}
+
+void crust_path_destroy(CRUST_PATH * path)
+{
+    if(path == NULL)
+    {
+        return;
+    }
+    free(path->linkedBlocks);
+    free(path);
+}
+
 void crust_track_circuit_index_add(CRUST_TRACK_CIRCUIT * trackCircuit, CRUST_STATE * state)
 {
     crust_index_regrow((void **) &state->trackCircuitIndex, &state->trackCircuitIndexLength, &state->trackCircuitIndexPointer, sizeof(CRUST_TRACK_CIRCUIT *));
@@ -365,8 +387,13 @@ void crust_remap_berths_block_walk(CRUST_BLOCK * block,
                                    CRUST_DIRECTION direction,
                                    CRUST_IDENTIFIER * numBlocks,
                                    CRUST_BLOCK *** foundBlocks,
+                                   CRUST_PATH *** pathsToFoundBlocks,
                                    CRUST_IDENTIFIER depth)
 {
+    static CRUST_BLOCK * path[CRUST_BLOCK_WALK_DEPTH_LIMIT];
+    path[depth] = block;
+    depth++;
+
     // If we've hit the depth limit do nothing and return
     if(depth > CRUST_BLOCK_WALK_DEPTH_LIMIT)
     {
@@ -374,7 +401,7 @@ void crust_remap_berths_block_walk(CRUST_BLOCK * block,
     }
 
     // If the block is a berth and we are not at the starting block then add it to the list and return
-    if(depth && block->berth && block->berthDirection == direction)
+    if(depth > 1 && block->berth && block->berthDirection == direction)
     {
         // Check that the block is not already recorded (if there is a loop this will happen)
         for(CRUST_IDENTIFIER i = 0; i < *numBlocks; i++)
@@ -392,10 +419,22 @@ void crust_remap_berths_block_walk(CRUST_BLOCK * block,
             exit(EXIT_FAILURE);
         }
         (*foundBlocks)[(*numBlocks) - 1] = block;
+
+        *pathsToFoundBlocks = realloc(*pathsToFoundBlocks, sizeof (CRUST_PATH *) * *numBlocks);
+        crust_path_init(&(*pathsToFoundBlocks)[(*numBlocks) - 1]);
+        (*pathsToFoundBlocks)[(*numBlocks) - 1]->numLinkedBlocks = depth;
+        (*pathsToFoundBlocks)[(*numBlocks) - 1]->linkedBlocks = malloc(sizeof(CRUST_BLOCK *) * depth);
+        if((*pathsToFoundBlocks)[(*numBlocks) - 1]->linkedBlocks == NULL)
+        {
+            crust_terminal_print("Memory allocation error");
+            exit(EXIT_FAILURE);
+        }
+        for(CRUST_IDENTIFIER i = 0; i < depth; i++)
+        {
+            (*pathsToFoundBlocks)[(*numBlocks) - 1]->linkedBlocks[i] = path[i];
+        }
         return;
     }
-
-    depth++;
 
     // To calculate the UP rear berths you have to search DOWN
     switch(direction)
@@ -403,22 +442,22 @@ void crust_remap_berths_block_walk(CRUST_BLOCK * block,
         case DOWN:
             if(block->links[upMain] != NULL)
             {
-                crust_remap_berths_block_walk(block->links[upMain], direction, numBlocks, foundBlocks, depth);
+                crust_remap_berths_block_walk(block->links[upMain], direction, numBlocks, foundBlocks, pathsToFoundBlocks, depth);
             }
             if(block->links[upBranching] != NULL)
             {
-                crust_remap_berths_block_walk(block->links[upBranching], direction, numBlocks, foundBlocks, depth);
+                crust_remap_berths_block_walk(block->links[upBranching], direction, numBlocks, foundBlocks, pathsToFoundBlocks, depth);
             }
             return;
 
         case UP:
             if(block->links[downMain] != NULL)
             {
-                crust_remap_berths_block_walk(block->links[downMain], direction, numBlocks, foundBlocks, depth);
+                crust_remap_berths_block_walk(block->links[downMain], direction, numBlocks, foundBlocks, pathsToFoundBlocks, depth);
             }
             if(block->links[downBranching] != NULL)
             {
-                crust_remap_berths_block_walk(block->links[downBranching], direction, numBlocks, foundBlocks, depth);
+                crust_remap_berths_block_walk(block->links[downBranching], direction, numBlocks, foundBlocks, pathsToFoundBlocks, depth);
             }
             return;
     }
@@ -431,12 +470,17 @@ void crust_remap_berths(CRUST_DIRECTION direction, CRUST_STATE * state)
         if(state->blockIndex[i]->berth && state->blockIndex[i]->berthDirection == direction)
         {
             free(state->blockIndex[i]->rearBerths);
+            for(CRUST_IDENTIFIER j = 0; j < state->blockIndex[i]->numRearBerths; j++)
+            {
+                crust_path_destroy(state->blockIndex[i]->pathsToRearBerths[j]);
+            }
             state->blockIndex[i]->rearBerths = NULL;
             state->blockIndex[i]->numRearBerths = 0;
             crust_remap_berths_block_walk(state->blockIndex[i],
                                           direction,
                                           &state->blockIndex[i]->numRearBerths,
                                           &state->blockIndex[i]->rearBerths,
+                                          &state->blockIndex[i]->pathsToRearBerths,
                                           0);
         }
     }
@@ -470,130 +514,86 @@ bool crust_interpose(CRUST_BLOCK * block, const char * headcode)
     return true;
 }
 
+bool crust_headcode_advance(CRUST_BLOCK * fromBlock, CRUST_BLOCK * toBlock)
+{
+    if(!fromBlock->berth)
+    {
+        return false;
+    }
+
+    if(!crust_interpose(toBlock, fromBlock->headcode))
+    {
+        return false;
+    }
+
+    return crust_interpose(fromBlock, CRUST_EMPTY_BERTH_HEADCODE);
+}
+
 size_t crust_headcode_auto_advance(CRUST_TRACK_CIRCUIT * occupiedTrackCircuit, CRUST_BLOCK *** affectedBlocks, CRUST_STATE * state)
 {
     CRUST_BLOCK * rearBlock = NULL;
     CRUST_BLOCK * advancedBlock = NULL;
-    // Find the interconnected track circuits
-    // Examine the occupied ones
-    // If only one of the occupied circuits contains a headcode oriented the right way then pull it
-    for(int i = 0; i < occupiedTrackCircuit->numUpEdgeBlocks; i++)
-    {
-        if(occupiedTrackCircuit->upEdgeBlocks[i]->links[upMain] != NULL
-            && occupiedTrackCircuit->upEdgeBlocks[i]->links[upMain]->trackCircuit != NULL
-            && occupiedTrackCircuit->upEdgeBlocks[i]->links[upMain]->trackCircuit->occupied == true
-            && occupiedTrackCircuit->upEdgeBlocks[i]->links[upMain]->berth == true
-            && occupiedTrackCircuit->upEdgeBlocks[i]->links[upMain]->berthDirection == DOWN
-            && occupiedTrackCircuit->upEdgeBlocks[i]->links[upMain]->headcode[0] != '_')
-        {
-            if(rearBlock != NULL)
-            {
-                // Two headcodes found
-                return 0;
-            }
-            rearBlock = occupiedTrackCircuit->upEdgeBlocks[i]->links[upMain];
-        }
+    CRUST_IDENTIFIER shortestPathFound = UINT32_MAX;
 
-        if(occupiedTrackCircuit->upEdgeBlocks[i]->links[upBranching] != NULL
-            && occupiedTrackCircuit->upEdgeBlocks[i]->links[upBranching]->trackCircuit != NULL
-            && occupiedTrackCircuit->upEdgeBlocks[i]->links[upBranching]->trackCircuit->occupied == true
-            && occupiedTrackCircuit->upEdgeBlocks[i]->links[upBranching]->berth == true
-            && occupiedTrackCircuit->upEdgeBlocks[i]->links[upBranching]->berthDirection == DOWN
-            && occupiedTrackCircuit->upEdgeBlocks[i]->links[upBranching]->headcode[0] != '_')
-        {
-            if(rearBlock != NULL)
-            {
-                // Two headcodes found
-                return 0;
-            }
-            rearBlock = occupiedTrackCircuit->upEdgeBlocks[i]->links[upBranching];
-        }
-    }
-
-    for(int i = 0; i < occupiedTrackCircuit->numDownEdgeBlocks; i++)
+    // Go through the berths in the occupied circuit
+    for(int i = 0; i < occupiedTrackCircuit->numBlocks; i++)
     {
-        if(occupiedTrackCircuit->downEdgeBlocks[i]->links[downMain] != NULL
-           && occupiedTrackCircuit->downEdgeBlocks[i]->links[downMain]->trackCircuit != NULL
-           && occupiedTrackCircuit->downEdgeBlocks[i]->links[downMain]->trackCircuit->occupied == true
-           && occupiedTrackCircuit->downEdgeBlocks[i]->links[downMain]->berth == true
-           && occupiedTrackCircuit->downEdgeBlocks[i]->links[downMain]->berthDirection == UP
-           && occupiedTrackCircuit->downEdgeBlocks[i]->links[downMain]->headcode[0] != '_')
+        // Focus on the empty berths
+        if(occupiedTrackCircuit->blocks[i]->berth && occupiedTrackCircuit->blocks[i]->headcode[0] == CRUST_EMPTY_BERTH_CHARACTER)
         {
-            if(rearBlock != NULL)
+            // Go through the berths in the rear of the empty berth (the berth in 'advance')
+            for(int j = 0; j < occupiedTrackCircuit->blocks[i]->numRearBerths; j++)
             {
-                // Two headcodes found
-                return 0;
-            }
-            rearBlock = occupiedTrackCircuit->downEdgeBlocks[i]->links[downMain];
-        }
-
-        if(occupiedTrackCircuit->downEdgeBlocks[i]->links[downBranching] != NULL
-           && occupiedTrackCircuit->downEdgeBlocks[i]->links[downBranching]->trackCircuit != NULL
-           && occupiedTrackCircuit->downEdgeBlocks[i]->links[downBranching]->trackCircuit->occupied == true
-           && occupiedTrackCircuit->downEdgeBlocks[i]->links[downBranching]->berth == true
-           && occupiedTrackCircuit->downEdgeBlocks[i]->links[downBranching]->berthDirection == UP
-           && occupiedTrackCircuit->downEdgeBlocks[i]->links[downBranching]->headcode[0] != '_')
-        {
-            if(rearBlock != NULL)
-            {
-                // Two headcodes found
-                return 0;
-            }
-            rearBlock = occupiedTrackCircuit->downEdgeBlocks[i]->links[downBranching];
-        }
-    }
-
-    if(rearBlock == NULL)
-    {
-        return 0;
-    }
-    else if(rearBlock->berthDirection == UP)
-    {
-        for(int i = 0; i < occupiedTrackCircuit->numUpEdgeBlocks; i++)
-        {
-            if(occupiedTrackCircuit->upEdgeBlocks[i]->berth == true
-                && occupiedTrackCircuit->upEdgeBlocks[i]->berthDirection == UP)
-            {
-                if(occupiedTrackCircuit->upEdgeBlocks[i]->headcode[0] == '_')
+                // If there is a headcode on the berth that is movable
+                if(occupiedTrackCircuit->blocks[i]->rearBerths[j]->headcode[0] != CRUST_EMPTY_BERTH_CHARACTER
+                && occupiedTrackCircuit->blocks[i]->rearBerths[j]->headcode[0] != CRUST_STATIC_BERTH_CHARACTER)
                 {
-                    advancedBlock = occupiedTrackCircuit->upEdgeBlocks[i];
-                    for(int j = 0; j < CRUST_HEADCODE_LENGTH; j++)
+                    // Find the first occupied circuit in the path that isn't the newly occupied circuit
+                    for(int k = 0; k < occupiedTrackCircuit->blocks[i]->pathsToRearBerths[j]->numLinkedBlocks; k++)
                     {
-                        advancedBlock->headcode[j] = rearBlock->headcode[j];
-                        rearBlock->headcode[j] = '_';
+                        if(occupiedTrackCircuit->blocks[i]->pathsToRearBerths[j]->linkedBlocks[k]->trackCircuit->occupied
+                        && occupiedTrackCircuit->blocks[i]->pathsToRearBerths[j]->linkedBlocks[k]->trackCircuit != occupiedTrackCircuit)
+                        {
+                            // If this path is shorter than the last one found then set it as the one we will use
+                            if(shortestPathFound < k)
+                            {
+                                shortestPathFound = k;
+                                rearBlock = occupiedTrackCircuit->blocks[i]->rearBerths[j];
+                                advancedBlock = occupiedTrackCircuit->blocks[i];
+                                break;
+                            }
+                            // If this path is the same length as the last one but the origin berth is now unoccupied then also set it
+                            else if(shortestPathFound == k && !occupiedTrackCircuit->blocks[i]->rearBerths[j]->trackCircuit->occupied)
+                            {
+                                rearBlock = occupiedTrackCircuit->blocks[i]->rearBerths[j];
+                                advancedBlock = occupiedTrackCircuit->blocks[i];
+                                break;
+                            }
+                        }
                     }
 
-                    *affectedBlocks = malloc(sizeof(CRUST_BLOCK *) * 2);
-                    (*affectedBlocks)[0] = rearBlock;
-                    (*affectedBlocks)[1] = advancedBlock;
-                    return 2;
+                    // If this is the first headcode we have found then take it anyway, regardless of path length
+                    // Also take it if we have a headcode with no path length but this one is in an unoccupied circuit
+                    if(advancedBlock == NULL
+                    || (shortestPathFound == UINT32_MAX && !occupiedTrackCircuit->blocks[i]->rearBerths[j]->trackCircuit->occupied))
+                    {
+                        rearBlock = occupiedTrackCircuit->blocks[i]->rearBerths[j];
+                        advancedBlock = occupiedTrackCircuit->blocks[i];
+                    }
                 }
             }
         }
     }
-    else if(rearBlock->berthDirection == DOWN)
-    {
-        for(int i = 0; i < occupiedTrackCircuit->numDownEdgeBlocks; i++)
-        {
-            if(occupiedTrackCircuit->downEdgeBlocks[i]->berth == true
-               && occupiedTrackCircuit->downEdgeBlocks[i]->berthDirection == DOWN)
-            {
-                if(occupiedTrackCircuit->downEdgeBlocks[i]->headcode[0] == '_')
-                {
-                    advancedBlock = occupiedTrackCircuit->downEdgeBlocks[i];
-                    for(int j = 0; j < CRUST_HEADCODE_LENGTH; j++)
-                    {
-                        advancedBlock->headcode[j] = rearBlock->headcode[j];
-                        rearBlock->headcode[j] = '_';
-                    }
 
-                    *affectedBlocks = malloc(sizeof(CRUST_BLOCK *) * 2);
-                    (*affectedBlocks)[0] = rearBlock;
-                    (*affectedBlocks)[1] = advancedBlock;
-                    return 2;
-                }
-            }
-        }
+    // If we've found an advancement to make then action it and output the blocks that have changed
+    if(advancedBlock != NULL)
+    {
+        crust_headcode_advance(rearBlock, advancedBlock);
+
+        *affectedBlocks = malloc(sizeof(CRUST_BLOCK *) * 2);
+        (*affectedBlocks)[0] = rearBlock;
+        (*affectedBlocks)[1] = advancedBlock;
+        return 2;
     }
 
     return 0;

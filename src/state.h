@@ -29,10 +29,13 @@
 #define CRUST_LINK_TYPE enum crustLinkType
 #define CRUST_DIRECTION enum crustDirection
 #define CRUST_INTERPOSE_INSTRUCTION struct crustInterposeInstruction
+#define CRUST_PATH struct crustPath
 #define CRUST_IDENTIFIER u_int32_t
 #define CRUST_MAX_LINKS 4
 #define CRUST_HEADCODE_LENGTH 4
 #define CRUST_EMPTY_BERTH_CHARACTER '_'
+#define CRUST_STATIC_BERTH_CHARACTER '*'
+#define CRUST_EMPTY_BERTH_HEADCODE "____"
 #define CRUST_DEFAULT_DIRECTION UP
 
 enum crustLinkType {
@@ -56,7 +59,13 @@ struct crustBlock {
     char headcode[CRUST_HEADCODE_LENGTH + 1]; // +1 for trailing null
     CRUST_DIRECTION berthDirection;
     CRUST_BLOCK ** rearBerths;
+    CRUST_PATH ** pathsToRearBerths;
     CRUST_IDENTIFIER numRearBerths;
+};
+
+struct crustPath {
+    CRUST_BLOCK ** linkedBlocks;
+    CRUST_IDENTIFIER numLinkedBlocks;
 };
 
 struct crustTrackCircuit {
