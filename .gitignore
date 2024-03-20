@@ -1,5 +1,5 @@
-# Idea directory
-.idea/
+# Idea files we don't want to share
+.idea/deployment.xml
 
 # Idea generated cmake files
 cmake-build-*/

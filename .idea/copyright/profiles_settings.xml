@@ -1,0 +1,25 @@
+<component name="CopyrightManager">
+  <settings>
+    <module2copyright>
+      <element module="Project Source Files" copyright="CRUST GPL Standard" />
+    </module2copyright>
+    <LanguageOptions name="ObjectiveC">
+      <option name="fileTypeOverride" value="3" />
+      <option name="separateBefore" value="true" />
+      <option name="separateAfter" value="true" />
+      <option name="lenBefore" value="79" />
+      <option name="lenAfter" value="79" />
+    </LanguageOptions>
+    <LanguageOptions name="Python">
+      <option name="fileTypeOverride" value="3" />
+      <option name="block" value="false" />
+    </LanguageOptions>
+    <LanguageOptions name="__TEMPLATE__">
+      <option name="block" value="false" />
+      <option name="separateBefore" value="true" />
+      <option name="separateAfter" value="true" />
+      <option name="lenBefore" value="79" />
+      <option name="lenAfter" value="79" />
+    </LanguageOptions>
+  </settings>
+</component>
