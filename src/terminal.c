@@ -20,7 +20,7 @@
 
 #include <stdio.h>
 #include "terminal.h"
-#include "options.h"
+#include "config.h"
 
 void crust_terminal_print(const char * text)
 {

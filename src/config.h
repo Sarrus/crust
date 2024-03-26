@@ -18,8 +18,8 @@
  * CRUST. If not, see <https://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#ifndef CRUST_OPTIONS_H
-#define CRUST_OPTIONS_H
+#ifndef CRUST_CONFIG_H
+#define CRUST_CONFIG_H
 #include <stdbool.h>
 #include <sys/types.h>
 #include <netinet/in.h>
@@ -63,4 +63,4 @@ extern char * crustOptionPinMapString;
 extern bool crustOptionInvertPinLogic;
 #endif
 
-#endif //CRUST_OPTIONS_H
+#endif //CRUST_CONFIG_H

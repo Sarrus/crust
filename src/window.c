@@ -32,7 +32,7 @@
 #include "state.h"
 #include "client.h"
 #include "messaging.h"
-#include "options.h"
+#include "config.h"
 
 enum crustWindowMode {
     LOG,

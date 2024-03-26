@@ -25,7 +25,7 @@
 #include <stdint.h>
 #include "messaging.h"
 #include "terminal.h"
-#include "options.h"
+#include "config.h"
 
 #define CRUST_PRINT_BUFFER_SIZE_INCREMENT 65536
 #define CRUST_DELIMITERS ";"

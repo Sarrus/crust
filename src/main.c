@@ -31,7 +31,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include "daemon.h"
-#include "options.h"
+#include "config.h"
 #include "terminal.h"
 #ifdef NCURSES
 #include "window.h"

@@ -4,7 +4,8 @@ add_executable(crust
         terminal.c
         state.c
         messaging.c
-        client.c)
+        client.c
+        config.c)
 
 if(WITH_GPIO)
     target_compile_definitions(crust PRIVATE GPIO)

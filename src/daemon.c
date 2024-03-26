@@ -31,7 +31,7 @@
 #include "daemon.h"
 #include "terminal.h"
 #include "state.h"
-#include "options.h"
+#include "config.h"
 #include "messaging.h"
 #ifdef SYSTEMD
 #include <systemd/sd-daemon.h>

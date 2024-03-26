@@ -31,7 +31,7 @@
 #include <time.h>
 #include "node.h"
 #include "terminal.h"
-#include "options.h"
+#include "config.h"
 #include "client.h"
 #ifdef SYSTEMD
 #include <systemd/sd-daemon.h>
