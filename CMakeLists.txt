@@ -7,7 +7,7 @@ set(CMAKE_C_STANDARD 99)
 ExternalProject_Add(libcyaml
         GIT_REPOSITORY "https://github.com/tlsa/libcyaml.git"
         GIT_TAG "v1.4.1"
-        SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/libcyaml/
+        SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/libcyaml
         CONFIGURE_COMMAND ""
         BUILD_COMMAND make -C ${CMAKE_CURRENT_LIST_DIR}/libcyaml/ VARIANT=release
         INSTALL_COMMAND ""
