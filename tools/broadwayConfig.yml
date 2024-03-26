@@ -1,0 +1,101 @@
+Server:
+  Config:
+    ListenAddress: 0.0.0.0
+    ListenPort: 12321
+    RunAsUser: crust
+    RunAsGroup: crust
+    VerboseOutput: true
+
+  Blocks:
+  - Id: 0
+    DownMain: 1
+  - Id: 1
+    UpMain: 0
+    DownMain: 2
+  - Id: 2
+    UpMain: 1
+    DownMain: 3
+    DownBranch: 5
+  - Id: 3
+    UpMain: 2
+    DownMain: 4
+    Berth: UP
+  - Id: 4
+    UpMain: 3
+    DownMain: 7
+    Berth: DOWN
+  - Id: 5
+    UpBranch: 2
+    DownMain: 6
+    Berth: UP
+  - Id: 6
+    UpMain: 5
+    DownBranch: 7
+    Berth: DOWN
+  - Id: 7
+    UpMain: 4
+    UpBranch: 6
+    DownMain: 8
+  - Id: 8
+    UpMain: 7
+    DownMain: 9
+  - Id: 10
+    UpMain: 9
+    DownMain: 11
+  - Id: 11
+    UpMain: 10
+    DownMain: 12
+    Berth: UP
+  - Id: 12
+    UpMain: 11
+    DownMain: 13
+    Berth: DOWN
+  - Id: 13
+    UpMain: 12
+    DownMain: 14
+    Berth: UP
+  - Id: 16
+    UpMain: 15
+    DownMain: 17
+    Berth: DOWN
+  - Id: 17
+    UpMain: 16
+
+  TrackCircuits:
+  - Id: 0
+    MemberBlocks:
+    - 1
+  - Id: 1
+    MemberBlocks:
+    - 2
+  - Id: 2
+    MemberBlocks:
+    - 3
+    - 4
+  - Id: 3
+    MemberBlocks:
+    - 5
+    - 6
+  - Id: 4
+    MemberBlocks:
+    - 7
+    - 8
+  - Id: 5
+    MemberBlocks:
+    - 9
+    - 10
+  - Id: 6
+    MemberBlocks:
+    - 11
+    - 12
+  - Id: 7
+    MemberBlocks:
+    - 13
+    - 14
+  - Id: 8
+    MemberBlocks:
+    - 15
+    - 16
+  - Id: 9
+    MemberBlocks:
+    - 17
