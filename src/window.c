@@ -36,11 +36,13 @@
 
 enum crustWindowMode {
     LOG,
-    HOME
+    WELCOME,
+    HOME,
+    MANUAL_INTERPOSE
 };
 
 #define CRUST_WINDOW_MODE enum crustWindowMode
-#define CRUST_WINDOW_DEFAULT_MODE HOME
+#define CRUST_WINDOW_DEFAULT_MODE WELCOME
 
 struct crustLineMapEntry {
     char character;
@@ -51,6 +53,7 @@ struct crustLineMapEntry {
     long berthNumber;
     long berthCharacterPos;
     char berthCharacter;
+    char berthNumberCharacter;
     bool showBerth;
 };
 
@@ -64,6 +67,7 @@ unsigned int lineMapLength = 0;
 #define CRUST_COLOUR_PAIR_CLEAR 2
 #define CRUST_COLOUR_PAIR_OCCUPIED 3
 #define CRUST_COLOUR_PAIR_HEADCODE 4
+#define CRUST_COLOUR_PAIR_BERTH_NUMBER 5
 
 #define CRUST_REGEX_CAPTURE_HEADCODE_FROM_BLOCK "^.*\\/.(.*):.*"
 regex_t regexCaptureHeadcodeFromBlock;
@@ -100,6 +104,7 @@ void crust_window_load_layout()
     char * line = NULL;
     char * lineNextSegment = NULL;
     char * intConvEndPos = NULL;
+    char berthNumberString[CRUST_HEADCODE_LENGTH + 1];
     size_t linecap = 0;
     ssize_t linelen;
 
@@ -202,6 +207,11 @@ void crust_window_load_layout()
                                 || intConvEndPos == line)
                             {
                                 lineMap[lineMapLength - 1].berthCharacterPos = -1;
+                            }
+                            else
+                            {
+                                snprintf(berthNumberString, CRUST_HEADCODE_LENGTH + 1, "%li_________________ ", lineMap[lineMapLength - 1].berthNumber);
+                                lineMap[lineMapLength - 1].berthNumberCharacter = berthNumberString[lineMap[lineMapLength - 1].berthCharacterPos];
                             }
                             break;
 
@@ -333,83 +343,25 @@ CRUST_OPCODE crust_window_interpret_message(char * message, CRUST_IDENTIFIER * r
     }
 }
 
-void crust_window_enter_mode(CRUST_WINDOW_MODE targetMode)
+void crust_window_refresh_screen(CRUST_WINDOW_MODE mode, char * inputBuffer, int inputPointer)
 {
-    switch(targetMode)
-    {
-        case LOG:
+    static bool flasher = false;
+    flasher = !flasher;
 
-            break;
-
-        case HOME:
-            initscr();
-            if(cbreak() != OK || noecho() != OK || nonl() != OK || nodelay(stdscr, TRUE) != OK)
-            {
-                crust_terminal_print("Failed to initialize screen.");
-                exit(EXIT_FAILURE);
-            }
-
-            if(has_colors() == FALSE)
-            {
-                crust_terminal_print("Colour support is required.");
-                exit(EXIT_FAILURE);
-            }
-
-            start_color();
-            init_color(COLOR_WHITE, 1000, 1000, 1000);
-            init_color(CRUST_COLOUR_GREY, 800, 800, 800);
-            init_pair(CRUST_COLOUR_PAIR_DEFAULT, CRUST_COLOUR_GREY, COLOR_BLACK);
-            init_pair(CRUST_COLOUR_PAIR_CLEAR, COLOR_WHITE, COLOR_BLACK);
-            init_pair(CRUST_COLOUR_PAIR_OCCUPIED, COLOR_RED, COLOR_BLACK);
-            init_pair(CRUST_COLOUR_PAIR_HEADCODE, COLOR_CYAN, COLOR_BLACK);
-
-            addstr("   __________  __  _____________\n"
-                   "  / ____/ __ \\/ / / / ___/_  __/\n"
-                   " / /   / /_/ / / / /\\__ \\ / /   \n"
-                   "/ /___/ _, _/ /_/ /___/ // /    \n"
-                   "\\____/_/ |_|\\____//____//_/     \n"
-                   "Consolidated,\n"
-                   "      Realtime\n"
-                   "            Updates on\n"
-                   "                  Status of\n"
-                   "                        Trains\n");
-            refresh();
-            for(int i = 5; i > 0; i--)
-            {
-                move(11, 15);
-                addch(i + 0x30);
-                refresh();
-                sleep(1);
-            }
-            break;
-    }
-}
-
-void crust_window_print(char * message, CRUST_WINDOW_MODE mode)
-{
-    switch(mode)
-    {
-        case LOG:
-            crust_terminal_print(message);
-            break;
-
-        default:
-            move(10, 0);
-            clrtoeol();
-            addstr(message);
-            refresh();
-            break;
-    }
-}
-
-void crust_window_refresh_screen()
-{
     clear();
     for(int i = 0; i < lineMapLength; i++)
     {
         move(lineMap[i].yPos, lineMap[i].xPos);
 
-        if(lineMap[i].showBerth)
+        if(mode == MANUAL_INTERPOSE && flasher && lineMap[i].berthNumber > -1)
+        {
+            attron(COLOR_PAIR(CRUST_COLOUR_PAIR_BERTH_NUMBER));
+            attron(A_BOLD);
+            addch(lineMap[i].berthNumberCharacter);
+            attroff(A_BOLD);
+            attroff(COLOR_PAIR(CRUST_COLOUR_PAIR_BERTH_NUMBER));
+        }
+        if(lineMap[i].berthNumber > -1 && (lineMap[i].showBerth || mode == MANUAL_INTERPOSE))
         {
             attron(COLOR_PAIR(CRUST_COLOUR_PAIR_HEADCODE));
             attron(A_BOLD);
@@ -440,24 +392,152 @@ void crust_window_refresh_screen()
             attroff(COLOR_PAIR(CRUST_COLOUR_PAIR_CLEAR));
         }
     }
+
+    move(LINES - 1, 0);
+
+    switch(mode)
+    {
+        case HOME:
+            addstr("Q: Quit, I: Manual Interpose");
+            move(LINES - 1, COLS - 1);
+            break;
+
+        case MANUAL_INTERPOSE:
+            addstr("MANUAL INTERPOSE type ");
+            attron(COLOR_PAIR(CRUST_COLOUR_PAIR_BERTH_NUMBER));
+            attron(A_BOLD);
+            addstr("BERTH: ");
+            addch(inputBuffer[0]);
+            addch(inputBuffer[1]);
+            addch(inputBuffer[2]);
+            addch(inputBuffer[3]);
+            attroff(A_BOLD);
+            attroff(COLOR_PAIR(CRUST_COLOUR_PAIR_BERTH_NUMBER));
+            addstr(" (enter) then ");
+            attron(COLOR_PAIR(CRUST_COLOUR_PAIR_HEADCODE));
+            attron(A_BOLD);
+            addstr("HEADCODE: ");
+            addch(inputBuffer[4]);
+            addch(inputBuffer[5]);
+            addch(inputBuffer[6]);
+            addch(inputBuffer[7]);
+            attroff(A_BOLD);
+            attroff(COLOR_PAIR(CRUST_COLOUR_PAIR_HEADCODE));
+            addstr(" (enter). Esc to cancel.");
+            if(inputPointer < 4)
+            {
+                move(LINES - 1, 29 + inputPointer);
+            }
+            else
+            {
+                move(LINES - 1, 53 + inputPointer);
+            }
+
+            break;
+    }
+
+
+
     refresh();
 }
 
-_Noreturn void crust_window_loop(CRUST_STATE * state, struct pollfd * pollList, CRUST_WINDOW_MODE mode)
+void crust_window_enter_mode(CRUST_WINDOW_MODE * currentMode, CRUST_WINDOW_MODE targetMode)
+{
+    switch(targetMode)
+    {
+        case LOG:
+
+            break;
+
+        case WELCOME:
+            initscr();
+            if(cbreak() != OK || noecho() != OK || nonl() != OK || nodelay(stdscr, TRUE) != OK)
+            {
+                crust_terminal_print("Failed to initialize screen.");
+                exit(EXIT_FAILURE);
+            }
+
+            if(has_colors() == FALSE)
+            {
+                crust_terminal_print("Colour support is required.");
+                exit(EXIT_FAILURE);
+            }
+
+            start_color();
+            init_color(COLOR_WHITE, 1000, 1000, 1000);
+            init_color(CRUST_COLOUR_GREY, 800, 800, 800);
+            init_pair(CRUST_COLOUR_PAIR_DEFAULT, CRUST_COLOUR_GREY, COLOR_BLACK);
+            init_pair(CRUST_COLOUR_PAIR_CLEAR, COLOR_WHITE, COLOR_BLACK);
+            init_pair(CRUST_COLOUR_PAIR_OCCUPIED, COLOR_RED, COLOR_BLACK);
+            init_pair(CRUST_COLOUR_PAIR_HEADCODE, COLOR_CYAN, COLOR_BLACK);
+            init_pair(CRUST_COLOUR_PAIR_BERTH_NUMBER, COLOR_YELLOW, COLOR_BLACK);
+
+            addstr("   __________  __  _____________\n"
+                   "  / ____/ __ \\/ / / / ___/_  __/\n"
+                   " / /   / /_/ / / / /\\__ \\ / /   \n"
+                   "/ /___/ _, _/ /_/ /___/ // /    \n"
+                   "\\____/_/ |_|\\____//____//_/     \n"
+                   "Consolidated,\n"
+                   "      Realtime\n"
+                   "            Updates on\n"
+                   "                  Status of\n"
+                   "                        Trains\n");
+            refresh();
+            for(int i = 5; i > 0; i--)
+            {
+                move(11, 15);
+                addch(i + 0x30);
+                refresh();
+                sleep(1);
+            }
+
+            *currentMode = HOME;
+
+            break;
+
+        case HOME:
+        case MANUAL_INTERPOSE:
+            *currentMode = targetMode;
+            break;
+    }
+}
+
+void crust_window_print(char * message, CRUST_WINDOW_MODE mode)
+{
+    switch(mode)
+    {
+        case LOG:
+            crust_terminal_print(message);
+            break;
+
+        default:
+            move(10, 0);
+            clrtoeol();
+            addstr(message);
+            refresh();
+            break;
+    }
+}
+
+_Noreturn void crust_window_loop(CRUST_STATE * state, struct pollfd * pollList, CRUST_WINDOW_MODE * mode)
 {
     char readBuffer[CRUST_MAX_MESSAGE_LENGTH];
+    char inputBuffer[10];
+    memset(inputBuffer, '_', 9);
+    inputBuffer[9] = '\0';
     int readPointer = 0;
+    int inputPointer = 0;
     CRUST_IDENTIFIER remoteID = 0;
     char * headcode = NULL;
     for(;;)
     {
         // Poll the server and the keyboard
-        poll(pollList, 2, -1);
+        poll(pollList, 2, 1000);
 
         // Handle data from the server
         if(pollList[1].revents & POLLHUP)
         {
-            crust_window_print("Server disconnected...", mode);
+            crust_window_print("Server disconnected...", *mode);
             sleep(5);
             crust_window_stop();
         }
@@ -466,7 +546,7 @@ _Noreturn void crust_window_loop(CRUST_STATE * state, struct pollfd * pollList, 
             // Try to read a character
             if(!read(pollList[1].fd, &readBuffer[readPointer], 1))
             {
-                crust_window_print("Server disconnected...", mode);
+                crust_window_print("Server disconnected...", *mode);
                 sleep(5);
                 crust_window_stop();
             }
@@ -493,15 +573,11 @@ _Noreturn void crust_window_loop(CRUST_STATE * state, struct pollfd * pollList, 
 
                         break;
                 }
-                if(mode == HOME)
-                {
-                    crust_window_refresh_screen();
-                }
                 readPointer = 0;
             }
             else if(readPointer > CRUST_MAX_MESSAGE_LENGTH)
             {
-                crust_window_print("Oversized message...", mode);
+                crust_window_print("Oversized message...", *mode);
                 sleep(5);
                 crust_window_stop();
             }
@@ -511,12 +587,66 @@ _Noreturn void crust_window_loop(CRUST_STATE * state, struct pollfd * pollList, 
             }
         }
 
-        // Handle data from the keyboard
-        switch(getch())
+        char inputCharacter = getch();
+
+        if(*mode != HOME)
         {
-            case 'q':
-                crust_window_stop();
+            if(inputCharacter == '\e')
+            {
+                inputPointer = 0;
+                memset(inputBuffer, '_', CRUST_HEADCODE_LENGTH * 2);
+                crust_window_enter_mode(mode, HOME);
+            }
+            else if(inputCharacter == '\x7f' && inputPointer)
+            {
+                inputPointer--;
+                inputBuffer[inputPointer] = '_';
+            }
+            else if(inputCharacter == '\r' || inputCharacter == '\n')
+            {
+                if(inputPointer % 4)
+                {
+                    inputPointer = ((inputPointer / 4) + 1) * 4;
+                }
+                if(inputPointer == 8)
+                {
+                    exit(EXIT_SUCCESS);
+                }
+            }
+            else if((inputCharacter >= 'A' && inputCharacter <= 'Z') || (inputCharacter >= '0' && inputCharacter <= '9'))
+            {
+                inputBuffer[inputPointer] = inputCharacter;
+                inputPointer++;
+            }
+
+            if(inputPointer > 8)
+            {
+                inputPointer = 8;
+            }
         }
+        else
+        {
+            switch(inputCharacter)
+            {
+                case 'q':
+                case 'Q':
+                    crust_window_stop();
+                    break;
+
+                case 'i':
+                case 'I':
+                    crust_window_enter_mode(mode, MANUAL_INTERPOSE);
+                    break;
+
+                case '\e':
+                    crust_window_enter_mode(mode, HOME);
+                    break;
+            }
+        }
+        // Handle data from the keyboard
+
+
+        crust_window_refresh_screen(*mode, inputBuffer, inputPointer);
     }
 }
 
@@ -549,6 +679,7 @@ _Noreturn void crust_window_run()
     write(pollList[1].fd, "SL\n", 3);
 
     CRUST_WINDOW_MODE windowStartingMode;
+    CRUST_WINDOW_MODE currentWindowMode = LOG;
 
     if(crustOptionWindowEnterLog)
     {
@@ -559,7 +690,7 @@ _Noreturn void crust_window_run()
         windowStartingMode = CRUST_WINDOW_DEFAULT_MODE;
     }
 
-    crust_window_enter_mode(windowStartingMode);
+    crust_window_enter_mode(&currentWindowMode, windowStartingMode);
 
-    crust_window_loop(state, pollList, windowStartingMode);
+    crust_window_loop(state, pollList, &currentWindowMode);
 }
