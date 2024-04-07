@@ -345,8 +345,7 @@ CRUST_OPCODE crust_window_interpret_message(char * message, CRUST_IDENTIFIER * r
 
 void crust_window_refresh_screen(CRUST_WINDOW_MODE mode, char * inputBuffer, int inputPointer)
 {
-    static bool flasher = false;
-    flasher = !flasher;
+    bool flasher = time(NULL) % 2;
 
     clear();
     for(int i = 0; i < lineMapLength; i++)
