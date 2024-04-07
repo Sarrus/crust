@@ -618,6 +618,11 @@ _Noreturn void crust_window_loop(CRUST_STATE * state, struct pollfd * pollList, 
                 inputBuffer[inputPointer] = inputCharacter;
                 inputPointer++;
             }
+            else if(inputCharacter >= 'a' && inputCharacter <= 'z')
+            {
+                inputBuffer[inputPointer] = inputCharacter - 32;
+                inputPointer++;
+            }
 
             if(inputPointer > 8)
             {
