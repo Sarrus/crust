@@ -38,7 +38,8 @@ enum crustWindowMode {
     LOG,
     WELCOME,
     HOME,
-    MANUAL_INTERPOSE
+    MANUAL_INTERPOSE,
+    MANUAL_CLEAR
 };
 
 #define CRUST_WINDOW_MODE enum crustWindowMode
@@ -361,6 +362,13 @@ void crust_window_process_input(char * inputBuffer, int connectionFp, CRUST_WIND
             snprintf(writeBuffer, CRUST_MAX_MESSAGE_LENGTH, "IP%li/%s\n", berth, headcode);
             write(connectionFp, writeBuffer, strlen(writeBuffer));
             break;
+
+        case MANUAL_CLEAR:
+            inputBuffer[4] = '\0';
+            berth = strtoul(inputBuffer, NULL, 10);
+            snprintf(writeBuffer, CRUST_MAX_MESSAGE_LENGTH, "IP%li/____\n", berth);
+            write(connectionFp, writeBuffer, strlen(writeBuffer));
+            break;
     }
 }
 
@@ -373,7 +381,7 @@ void crust_window_refresh_screen(CRUST_WINDOW_MODE mode, char * inputBuffer, int
     {
         move(lineMap[i].yPos, lineMap[i].xPos);
 
-        if(mode == MANUAL_INTERPOSE && flasher && lineMap[i].berthNumber > -1)
+        if(mode != HOME && flasher && lineMap[i].berthNumber > -1)
         {
             attron(COLOR_PAIR(CRUST_COLOUR_PAIR_BERTH_NUMBER));
             attron(A_BOLD);
@@ -418,7 +426,7 @@ void crust_window_refresh_screen(CRUST_WINDOW_MODE mode, char * inputBuffer, int
     switch(mode)
     {
         case HOME:
-            addstr("Q: Quit, I: Manual Interpose");
+            addstr("Q: Quit, I: Manual Interpose, C: Manual Clear");
             move(LINES - 1, COLS - 1);
             break;
 
@@ -453,6 +461,21 @@ void crust_window_refresh_screen(CRUST_WINDOW_MODE mode, char * inputBuffer, int
                 move(LINES - 1, 53 + inputPointer);
             }
 
+            break;
+
+        case MANUAL_CLEAR:
+            addstr("MANUAL CLEAR type ");
+            attron(COLOR_PAIR(CRUST_COLOUR_PAIR_BERTH_NUMBER));
+            attron(A_BOLD);
+            addstr("BERTH: ");
+            addch(inputBuffer[0]);
+            addch(inputBuffer[1]);
+            addch(inputBuffer[2]);
+            addch(inputBuffer[3]);
+            attroff(A_BOLD);
+            attroff(COLOR_PAIR(CRUST_COLOUR_PAIR_BERTH_NUMBER));
+            addstr(" (enter). Esc to cancel.");
+            move(LINES - 1, 25 + inputPointer);
             break;
     }
 
@@ -517,6 +540,7 @@ void crust_window_enter_mode(CRUST_WINDOW_MODE * currentMode, CRUST_WINDOW_MODE 
 
         case HOME:
         case MANUAL_INTERPOSE:
+        case MANUAL_CLEAR:
             *currentMode = targetMode;
             break;
     }
@@ -628,7 +652,7 @@ _Noreturn void crust_window_loop(CRUST_STATE * state, struct pollfd * pollList, 
                 {
                     inputPointer = ((inputPointer / 4) + 1) * 4;
                 }
-                if(inputPointer == 8)
+                if(inputPointer == 8 || (inputPointer == 4 && *mode == MANUAL_CLEAR))
                 {
                     crust_window_process_input(inputBuffer, pollList[1].fd, *mode);
                     memset(inputBuffer, '_', CRUST_HEADCODE_LENGTH * 2);
@@ -652,6 +676,10 @@ _Noreturn void crust_window_loop(CRUST_STATE * state, struct pollfd * pollList, 
             {
                 inputPointer = 8;
             }
+            if(inputPointer > 4 && *mode == MANUAL_CLEAR)
+            {
+                inputPointer = 4;
+            }
         }
         else
         {
@@ -660,6 +688,11 @@ _Noreturn void crust_window_loop(CRUST_STATE * state, struct pollfd * pollList, 
                 case 'q':
                 case 'Q':
                     crust_window_stop();
+                    break;
+
+                case 'c':
+                case 'C':
+                    crust_window_enter_mode(mode, MANUAL_CLEAR);
                     break;
 
                 case 'i':
