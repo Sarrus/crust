@@ -36,6 +36,7 @@
 #define CRUST_SOCKET_QUEUE_LIMIT 4096
 #define CRUST_DEFAULT_PORT 12321
 #define CRUST_DEFAULT_IP_ADDRESS 0x100007f // 127.0.0.1
+#define CRUST_DEFAULT_CONFIG_FILE "/etc/crust.yml"
 
 enum crustRunMode {
     CRUST_RUN_MODE_CLI,
@@ -56,11 +57,14 @@ extern in_port_t crustOptionPort;
 extern in_addr_t crustOptionIPAddress;
 extern bool crustOptionWindowEnterLog;
 extern char crustOptionWindowConfigFilePath[PATH_MAX];
+extern char crustConfigFilePath[PATH_MAX];
 
 #ifdef GPIO
 extern char crustOptionGPIOPath[PATH_MAX];
 extern char * crustOptionPinMapString;
 extern bool crustOptionInvertPinLogic;
 #endif
+
+void crust_config_load_defaults();
 
 #endif //CRUST_CONFIG_H

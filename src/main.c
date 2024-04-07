@@ -43,39 +43,13 @@
 #include <uuid/uuid.h>
 #endif
 
-bool crustOptionVerbose = false;
-enum crustRunMode crustOptionRunMode = CRUST_RUN_MODE_CLI;
-char crustOptionRunDirectory[PATH_MAX];
-char crustOptionSocketPath[PATH_MAX];
-bool crustOptionSetUser = false;
-uid_t crustOptionTargetUser;
-bool crustOptionSetGroup = false;
-gid_t crustOptionTargetGroup;
-in_port_t crustOptionPort = CRUST_DEFAULT_PORT;
-in_addr_t crustOptionIPAddress = CRUST_DEFAULT_IP_ADDRESS;
-
-#ifdef NCURSES
-bool crustOptionWindowEnterLog = false;
-char crustOptionWindowConfigFilePath[PATH_MAX];
-#endif
-
-#ifdef GPIO
-char crustOptionGPIOPath[PATH_MAX];
-char * crustOptionPinMapString = NULL;
-bool crustOptionInvertPinLogic = false;
-#endif
-
 int main(int argc, char ** argv) {
 #ifdef TESTING
     crust_terminal_print("WARNING: CRUST has been compiled with -DWITH_TESTING. This compile option enables insecure "
                          "functionality and should NEVER be used in production. Stay safe out there.");
 #endif
 
-    strncpy(crustOptionRunDirectory, CRUST_RUN_DIRECTORY, PATH_MAX);
-    strncpy(crustOptionSocketPath, CRUST_RUN_DIRECTORY, PATH_MAX);
-    strncat(crustOptionSocketPath, CRUST_SOCKET_NAME, PATH_MAX - strlen(crustOptionSocketPath) - 1);
-    crustOptionTargetUser = getuid();
-    crustOptionTargetGroup = getgid();
+    crust_config_load_defaults();
 
     struct passwd * userInfo = NULL;
     struct group * groupInfo = NULL;
