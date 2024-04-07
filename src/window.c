@@ -343,6 +343,27 @@ CRUST_OPCODE crust_window_interpret_message(char * message, CRUST_IDENTIFIER * r
     }
 }
 
+void crust_window_process_input(char * inputBuffer, int connectionFp, CRUST_WINDOW_MODE mode)
+{
+    char headcode[CRUST_HEADCODE_LENGTH + 1];
+    unsigned long berth;
+    char writeBuffer[CRUST_MAX_MESSAGE_LENGTH];
+    switch(mode)
+    {
+        case MANUAL_INTERPOSE:
+            for(int i = 0; i < CRUST_HEADCODE_LENGTH; i++)
+            {
+                headcode[i] = inputBuffer[i + 4];
+            }
+            headcode[CRUST_HEADCODE_LENGTH] = '\0';
+            inputBuffer[4] = '\0';
+            berth = strtoul(inputBuffer, NULL, 10);
+            snprintf(writeBuffer, CRUST_MAX_MESSAGE_LENGTH, "IP%li/%s\n", berth, headcode);
+            write(connectionFp, writeBuffer, strlen(writeBuffer));
+            break;
+    }
+}
+
 void crust_window_refresh_screen(CRUST_WINDOW_MODE mode, char * inputBuffer, int inputPointer)
 {
     bool flasher = time(NULL) % 2;
@@ -609,15 +630,19 @@ _Noreturn void crust_window_loop(CRUST_STATE * state, struct pollfd * pollList, 
                 }
                 if(inputPointer == 8)
                 {
-                    exit(EXIT_SUCCESS);
+                    crust_window_process_input(inputBuffer, pollList[1].fd, *mode);
+                    memset(inputBuffer, '_', CRUST_HEADCODE_LENGTH * 2);
+                    inputPointer = 0;
+                    crust_window_enter_mode(mode, HOME);
                 }
             }
-            else if((inputCharacter >= 'A' && inputCharacter <= 'Z') || (inputCharacter >= '0' && inputCharacter <= '9'))
+            else if((inputCharacter >= 'A' && inputCharacter <= 'Z' && inputPointer > 3)
+                || (inputCharacter >= '0' && inputCharacter <= '9'))
             {
                 inputBuffer[inputPointer] = inputCharacter;
                 inputPointer++;
             }
-            else if(inputCharacter >= 'a' && inputCharacter <= 'z')
+            else if(inputCharacter >= 'a' && inputCharacter <= 'z' && inputPointer > 3)
             {
                 inputBuffer[inputPointer] = inputCharacter - 32;
                 inputPointer++;
