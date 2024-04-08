@@ -509,7 +509,9 @@ void crust_window_enter_mode(CRUST_WINDOW_MODE * currentMode, CRUST_WINDOW_MODE 
             start_color();
             init_color(COLOR_WHITE, 1000, 1000, 1000);
             init_color(CRUST_COLOUR_GREY, 800, 800, 800);
-            init_pair(CRUST_COLOUR_PAIR_DEFAULT, CRUST_COLOUR_GREY, COLOR_BLACK);
+            init_pair(CRUST_COLOUR_PAIR_DEFAULT, COLOR_WHITE, COLOR_BLACK);
+            init_color(CRUST_COLOUR_GREY, 800, 800, 800);
+            init_pair(CRUST_COLOUR_PAIR_DEFAULT, CRUST_COLOUR_GREY, COLOR_BLACK); //Overset above for terminals that support it
             init_pair(CRUST_COLOUR_PAIR_CLEAR, COLOR_WHITE, COLOR_BLACK);
             init_pair(CRUST_COLOUR_PAIR_OCCUPIED, COLOR_RED, COLOR_BLACK);
             init_pair(CRUST_COLOUR_PAIR_HEADCODE, COLOR_CYAN, COLOR_BLACK);
