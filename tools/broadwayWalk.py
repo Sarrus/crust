@@ -1,6 +1,6 @@
 #!/bin/python3
 # Simulates a train entering Broadway (GWSR) station, running round and then departing.
-# To use, initialise a CRUST daemon with broadwayInit.txt, run enableTestGPIO.sh and start a node pointing to the test
+# To use, initialise a CRUST daemon with gwsrInit.txt, run enableTestGPIO.sh and start a node pointing to the test
 # GPIO chip that the script creates. You can then run this script which will loop endlessly until stopped.
 
 import time
