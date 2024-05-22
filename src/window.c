@@ -32,7 +32,6 @@
 #include "state.h"
 #include "client.h"
 #include "messaging.h"
-#include "config.h"
 #include "connectivity.h"
 
 enum crustWindowMode {
@@ -52,6 +51,9 @@ CRUST_WINDOW_MODE currentWindowMode = LOG;
 
 int reconnectWaitTimer = -1;
 #define RECONNECTION_WAIT_TIME 10
+
+int keyboardInputPointer = 0;
+static char keyboardInputBuffer[10] = "________\0\0";
 
 struct crustLineMapEntry {
     char character;
@@ -352,35 +354,35 @@ CRUST_OPCODE crust_window_interpret_message(char * message, CRUST_IDENTIFIER * r
     }
 }
 
-void crust_window_process_input(char * inputBuffer, int connectionFp, CRUST_WINDOW_MODE mode)
+void crust_window_process_input(char * receivedInputBuffer, int connectionFp)
 {
     char headcode[CRUST_HEADCODE_LENGTH + 1];
     unsigned long berth;
     char writeBuffer[CRUST_MAX_MESSAGE_LENGTH];
-    switch(mode)
+    switch(currentWindowMode)
     {
         case MANUAL_INTERPOSE:
             for(int i = 0; i < CRUST_HEADCODE_LENGTH; i++)
             {
-                headcode[i] = inputBuffer[i + 4];
+                headcode[i] = receivedInputBuffer[i + 4];
             }
             headcode[CRUST_HEADCODE_LENGTH] = '\0';
-            inputBuffer[4] = '\0';
-            berth = strtoul(inputBuffer, NULL, 10);
+            receivedInputBuffer[4] = '\0';
+            berth = strtoul(receivedInputBuffer, NULL, 10);
             snprintf(writeBuffer, CRUST_MAX_MESSAGE_LENGTH, "IP%li/%s\n", berth, headcode);
             write(connectionFp, writeBuffer, strlen(writeBuffer));
             break;
 
         case MANUAL_CLEAR:
-            inputBuffer[4] = '\0';
-            berth = strtoul(inputBuffer, NULL, 10);
+            receivedInputBuffer[4] = '\0';
+            berth = strtoul(receivedInputBuffer, NULL, 10);
             snprintf(writeBuffer, CRUST_MAX_MESSAGE_LENGTH, "IP%li/____\n", berth);
             write(connectionFp, writeBuffer, strlen(writeBuffer));
             break;
     }
 }
 
-void crust_window_refresh_screen(char * inputBuffer, int inputPointer)
+void crust_window_refresh_screen()
 {
     bool flasher = time(NULL) % 2;
 
@@ -443,30 +445,30 @@ void crust_window_refresh_screen(char * inputBuffer, int inputPointer)
             attron(COLOR_PAIR(CRUST_COLOUR_PAIR_BERTH_NUMBER));
             attron(A_BOLD);
             addstr("BERTH: ");
-            addch(inputBuffer[0]);
-            addch(inputBuffer[1]);
-            addch(inputBuffer[2]);
-            addch(inputBuffer[3]);
+            addch(keyboardInputBuffer[0]);
+            addch(keyboardInputBuffer[1]);
+            addch(keyboardInputBuffer[2]);
+            addch(keyboardInputBuffer[3]);
             attroff(A_BOLD);
             attroff(COLOR_PAIR(CRUST_COLOUR_PAIR_BERTH_NUMBER));
             addstr(" (enter) then ");
             attron(COLOR_PAIR(CRUST_COLOUR_PAIR_HEADCODE));
             attron(A_BOLD);
             addstr("HEADCODE: ");
-            addch(inputBuffer[4]);
-            addch(inputBuffer[5]);
-            addch(inputBuffer[6]);
-            addch(inputBuffer[7]);
+            addch(keyboardInputBuffer[4]);
+            addch(keyboardInputBuffer[5]);
+            addch(keyboardInputBuffer[6]);
+            addch(keyboardInputBuffer[7]);
             attroff(A_BOLD);
             attroff(COLOR_PAIR(CRUST_COLOUR_PAIR_HEADCODE));
             addstr(" (enter). Esc to cancel.");
-            if(inputPointer < 4)
+            if(keyboardInputPointer < 4)
             {
-                move(LINES - 1, 29 + inputPointer);
+                move(LINES - 1, 29 + keyboardInputPointer);
             }
             else
             {
-                move(LINES - 1, 53 + inputPointer);
+                move(LINES - 1, 53 + keyboardInputPointer);
             }
 
             break;
@@ -476,14 +478,14 @@ void crust_window_refresh_screen(char * inputBuffer, int inputPointer)
             attron(COLOR_PAIR(CRUST_COLOUR_PAIR_BERTH_NUMBER));
             attron(A_BOLD);
             addstr("BERTH: ");
-            addch(inputBuffer[0]);
-            addch(inputBuffer[1]);
-            addch(inputBuffer[2]);
-            addch(inputBuffer[3]);
+            addch(keyboardInputBuffer[0]);
+            addch(keyboardInputBuffer[1]);
+            addch(keyboardInputBuffer[2]);
+            addch(keyboardInputBuffer[3]);
             attroff(A_BOLD);
             attroff(COLOR_PAIR(CRUST_COLOUR_PAIR_BERTH_NUMBER));
             addstr(" (enter). Esc to cancel.");
-            move(LINES - 1, 25 + inputPointer);
+            move(LINES - 1, 25 + keyboardInputPointer);
             break;
 
         case CONNECTING:
@@ -590,59 +592,57 @@ void crust_window_print(char * message, CRUST_WINDOW_MODE mode)
 
 void crust_window_handle_keyboard()
 {
-    static int inputPointer = 0;
-    static char inputBuffer[10] = "\0\0\0\0\0\0\0\0\0\0";
     char inputCharacter = getch();
 
-    if(currentWindowMode != HOME)
+    if(currentWindowMode == MANUAL_INTERPOSE || currentWindowMode == MANUAL_CLEAR)
     {
         if(inputCharacter == '\e')
         {
-            inputPointer = 0;
-            memset(inputBuffer, '_', CRUST_HEADCODE_LENGTH * 2);
+            keyboardInputPointer = 0;
+            memset(keyboardInputBuffer, '_', CRUST_HEADCODE_LENGTH * 2);
             crust_window_enter_mode(HOME);
         }
-        else if(inputCharacter == '\x7f' && inputPointer)
+        else if(inputCharacter == '\x7f' && keyboardInputPointer)
         {
-            inputPointer--;
-            inputBuffer[inputPointer] = '_';
+            keyboardInputPointer--;
+            keyboardInputBuffer[keyboardInputPointer] = '_';
         }
         else if(inputCharacter == '\r' || inputCharacter == '\n')
         {
-            if(inputPointer % 4)
+            if(keyboardInputPointer % 4)
             {
-                inputPointer = ((inputPointer / 4) + 1) * 4;
+                keyboardInputPointer = ((keyboardInputPointer / 4) + 1) * 4;
             }
-            if(inputPointer == 8 || (inputPointer == 4 && currentWindowMode == MANUAL_CLEAR))
+            if(keyboardInputPointer == 8 || (keyboardInputPointer == 4 && currentWindowMode == MANUAL_CLEAR))
             {
-                //crust_window_process_input(inputBuffer, pollList[1].fd, currentWindowMode);
-                memset(inputBuffer, '_', CRUST_HEADCODE_LENGTH * 2);
-                inputPointer = 0;
+                //crust_window_process_input(keyboardInputBuffer, pollList[1].fd, currentWindowMode);
+                memset(keyboardInputBuffer, '_', CRUST_HEADCODE_LENGTH * 2);
+                keyboardInputPointer = 0;
                 crust_window_enter_mode(HOME);
             }
         }
-        else if((inputCharacter >= 'A' && inputCharacter <= 'Z' && inputPointer > 3)
+        else if((inputCharacter >= 'A' && inputCharacter <= 'Z' && keyboardInputPointer > 3)
             || (inputCharacter >= '0' && inputCharacter <= '9'))
         {
-            inputBuffer[inputPointer] = inputCharacter;
-            inputPointer++;
+            keyboardInputBuffer[keyboardInputPointer] = inputCharacter;
+            keyboardInputPointer++;
         }
-        else if(inputCharacter >= 'a' && inputCharacter <= 'z' && inputPointer > 3)
+        else if(inputCharacter >= 'a' && inputCharacter <= 'z' && keyboardInputPointer > 3)
         {
-            inputBuffer[inputPointer] = inputCharacter - 32;
-            inputPointer++;
+            keyboardInputBuffer[keyboardInputPointer] = inputCharacter - 32;
+            keyboardInputPointer++;
         }
 
-        if(inputPointer > 8)
+        if(keyboardInputPointer > 8)
         {
-            inputPointer = 8;
+            keyboardInputPointer = 8;
         }
-        if(inputPointer > 4 && currentWindowMode == MANUAL_CLEAR)
+        if(keyboardInputPointer > 4 && currentWindowMode == MANUAL_CLEAR)
         {
-            inputPointer = 4;
+            keyboardInputPointer = 4;
         }
     }
-    else
+    else if(currentWindowMode == HOME)
     {
         switch(inputCharacter)
         {
@@ -653,16 +653,16 @@ void crust_window_handle_keyboard()
 
             case 'c':
             case 'C':
-                crust_window_enter_mode(currentWindowMode);
+                crust_window_enter_mode(MANUAL_CLEAR);
                 break;
 
             case 'i':
             case 'I':
-                crust_window_enter_mode(currentWindowMode);
+                crust_window_enter_mode(MANUAL_INTERPOSE);
                 break;
 
             case '\e':
-                crust_window_enter_mode(currentWindowMode);
+                crust_window_enter_mode(HOME);
                 break;
         }
     }
@@ -670,11 +670,52 @@ void crust_window_handle_keyboard()
 
 }
 
-void crust_window_recieve_read(CRUST_CONNECTION * connection)
+void crust_window_handle_update(CRUST_CONNECTION * connection)
+{
+    size_t readBufferLength = strlen(connection->readBuffer);
+    size_t commandStart = 0;
+    CRUST_IDENTIFIER remoteID;
+    char * headcode = NULL;
+    for(int i = 0; i < readBufferLength; i++)
+    {
+        if(connection->readBuffer[i] == '\n')
+        {
+            connection->readBuffer[i] = '\0';
+            switch(crust_window_interpret_message(&connection->readBuffer[commandStart], &remoteID, &headcode))
+            {
+                case OCCUPY_TRACK_CIRCUIT:
+                    crust_window_set_occupation(remoteID, true);
+                    break;
+
+                case CLEAR_TRACK_CIRCUIT:
+                    crust_window_set_occupation(remoteID, false);
+                    break;
+
+                case UPDATE_BLOCK:
+                    crust_window_update_berth(remoteID, headcode);
+                    break;
+
+                default:
+
+                    break;
+            }
+
+            connection->readBuffer[i] = '\n';
+            commandStart = i + 1;
+        }
+    }
+    connection->readTo = commandStart;
+}
+
+void crust_window_receive_read(CRUST_CONNECTION * connection)
 {
     if(connection->type == CONNECTION_TYPE_KEYBOARD)
     {
         crust_window_handle_keyboard();
+    }
+    else if(connection->type == CONNECTION_TYPE_READ_WRITE)
+    {
+        crust_window_handle_update(connection);
     }
 }
 
@@ -687,7 +728,7 @@ void crust_window_receive_close(CRUST_CONNECTION * connection)
 {
     if(connection->didConnect)
     {
-        crust_connection_read_write_open(crust_window_recieve_read,
+        crust_connection_read_write_open(crust_window_receive_read,
                                          crust_window_receive_open,
                                          crust_window_receive_close,
                                          crustOptionIPAddress,
@@ -703,9 +744,6 @@ void crust_window_receive_close(CRUST_CONNECTION * connection)
 _Noreturn void crust_window_loop()
 {
     char readBuffer[CRUST_MAX_MESSAGE_LENGTH];
-    char inputBuffer[10];
-    memset(inputBuffer, '_', 9);
-    inputBuffer[9] = '\0';
     int readPointer = 0;
 
     CRUST_IDENTIFIER remoteID = 0;
@@ -778,7 +816,7 @@ _Noreturn void crust_window_loop()
         }
         else if(reconnectWaitTimer == 0)
         {
-            crust_connection_read_write_open(crust_window_recieve_read,
+            crust_connection_read_write_open(crust_window_receive_read,
                                              crust_window_receive_open,
                                              crust_window_receive_close,
                                              crustOptionIPAddress,
@@ -786,8 +824,8 @@ _Noreturn void crust_window_loop()
             reconnectWaitTimer = -1;
         }
 
-        int inputPointer = 0;
-        crust_window_refresh_screen(inputBuffer, inputPointer);
+
+        crust_window_refresh_screen();
     }
 }
 
@@ -815,11 +853,12 @@ _Noreturn void crust_window_run()
 //
 //    write(pollList[1].fd, "SL\n", 3);
 
-    crust_connection_read_write_open(crust_window_recieve_read,
+    crust_connection_read_write_open(crust_window_receive_read,
                                      crust_window_receive_open,
                                      crust_window_receive_close,
                                      crustOptionIPAddress,
                                      crustOptionPort);
+    crust_connection_read_keyboard_open(crust_window_receive_read);
 
     CRUST_WINDOW_MODE windowStartingMode;
 

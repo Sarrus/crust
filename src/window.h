@@ -21,6 +21,8 @@
 #ifndef CRUST_WINDOW_H
 #define CRUST_WINDOW_H
 
+#include "config.h"
+
 _Noreturn void crust_window_run();
 
 #endif //CRUST_WINDOW_H

@@ -39,6 +39,7 @@ struct crustConnection{
     void (*openFunction)(CRUST_CONNECTION *);  // Called when a connection is received on a socket
     void (*closeFunction)(CRUST_CONNECTION *); // Called when the connection is closed
     char * readBuffer;
+    size_t readTo; // Used by the receiving code to indicate how far it has read
     char * writeBuffer;
     bool didConnect;
     bool didClose;
@@ -57,5 +58,7 @@ CRUST_CONNECTION * crust_connection_read_write_open(void (*readFunction)(CRUST_C
                                                     void (*closeFunction)(CRUST_CONNECTION *),
                                                     in_addr_t address,
                                                     in_port_t port);
+
+CRUST_CONNECTION * crust_connection_read_keyboard_open(void (*readFunction)(CRUST_CONNECTION *));
 
 #endif //CRUST_CONNECTIVITY_H

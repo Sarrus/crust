@@ -23,12 +23,12 @@
 
 #include <time.h>
 #include "state.h"
+#include "config.h"
 
 #define CRUST_OPCODE enum crustOpcode
 #define CRUST_INPUT_BUFFER struct crustInputBuffer
 #define CRUST_DYNAMIC_PRINT_BUFFER struct crustDynamicPrintBuffer
 #define CRUST_MIXED_OPERATION_INPUT union crustMixedOperationInput
-#define CRUST_MAX_MESSAGE_LENGTH 256
 
 enum crustOpcode {
     NO_OPERATION,

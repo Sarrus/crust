@@ -39,6 +39,7 @@ void crust_connection_init(CRUST_CONNECTION * connection)
     connection->openFunction = NULL;
     connection->closeFunction = NULL;
     connection->readBuffer = NULL;
+    connection->readTo = 0;
     connection->writeBuffer = NULL;
     connection->didConnect = false;
     connection->didClose = false;
@@ -70,7 +71,7 @@ void crust_connectivity_extend()
     }
 }
 
-CRUST_CONNECTION * crust_connection_read_keyboard(void (*readFunction)(CRUST_CONNECTION *))
+CRUST_CONNECTION * crust_connection_read_keyboard_open(void (*readFunction)(CRUST_CONNECTION *))
 {
     crust_connectivity_extend();
     CRUST_CONNECTION * connection = &connectivity.connectionList[connectivity.connectionListLength - 1];
@@ -150,10 +151,13 @@ CRUST_CONNECTION * crust_connection_read_write_open(void (*readFunction)(CRUST_C
 
 void crust_connectivity_execute(int timeout)
 {
+    char localReadBuffer[CRUST_MAX_MESSAGE_LENGTH] = "";
+
     poll(connectivity.pollList, connectivity.connectionListLength, timeout);
 
     for(int i = 0; i < connectivity.connectionListLength; i++)
     {
+        // Handle hangups
         if(connectivity.pollList[i].revents & POLLHUP)
         {
             connectivity.connectionList[i].didClose = true;
@@ -165,6 +169,7 @@ void crust_connectivity_execute(int timeout)
             connectivity.pollList[i].events = 0; // Stop polling
         }
 
+        // Handle new outbound connections opening
         if(connectivity.pollList[i].revents & POLLWRNORM && connectivity.connectionList[i].didConnect == false)
         {
             connectivity.connectionList[i].didConnect = true;
@@ -176,11 +181,58 @@ void crust_connectivity_execute(int timeout)
             connectivity.pollList[i].events |= POLLRDNORM; // Start read polling
         }
 
+        // Handle reads
         if(connectivity.pollList[i].revents & POLLRDNORM)
         {
-            if(read(connectivity.pollList[i].fd, NULL, 0) == 0)
+            if(connectivity.connectionList[i].type == CONNECTION_TYPE_KEYBOARD)
             {
-                shutdown(connectivity.pollList[i].fd, SHUT_RDWR);
+                // Run the read function to show that keyboard data is available (don't actually read it, let ncurses do that)
+                connectivity.connectionList[i].readFunction(&connectivity.connectionList[i]);
+            }
+            else
+            {
+                size_t bytesRead = read(connectivity.pollList[i].fd, localReadBuffer, CRUST_MAX_MESSAGE_LENGTH - 1);
+                if(bytesRead == 0) //The connection is closing
+                {
+                    shutdown(connectivity.pollList[i].fd, SHUT_RDWR);
+                }
+                else
+                {
+                    localReadBuffer[bytesRead] = '\0';
+                    size_t connectivityReadBufferLength;
+                    if(connectivity.connectionList[i].readBuffer == NULL)
+                    {
+                        connectivityReadBufferLength = 0;
+                    }
+                    else
+                    {
+                        connectivityReadBufferLength = strlen(connectivity.connectionList[i].readBuffer);
+                    }
+
+                    size_t newConnectivityReadBufferLength = connectivityReadBufferLength + bytesRead + 1;
+
+                    connectivity.connectionList[i].readBuffer = realloc(
+                            connectivity.connectionList[i].readBuffer,
+                            newConnectivityReadBufferLength);
+
+                    strlcat(connectivity.connectionList[i].readBuffer, localReadBuffer, newConnectivityReadBufferLength);
+
+                    // Tell the program that there is data to read
+                    connectivity.connectionList[i].readFunction(&connectivity.connectionList[i]);
+
+                    // Calculate how much has been left in the read buffer
+                    size_t bytesLeft = strlen(&connectivity.connectionList[i].readBuffer[connectivity.connectionList[i].readTo]);
+                    if(!bytesLeft)
+                    {
+                        free(connectivity.connectionList[i].readBuffer);
+                        connectivity.connectionList[i].readBuffer = NULL;
+                    }
+                    else
+                    {
+                        char * newReadBuffer = malloc(bytesLeft + 1);
+                        strlcpy(newReadBuffer, &connectivity.connectionList[i].readBuffer[connectivity.connectionList[i].readTo], bytesLeft + 1);
+                    }
+                }
             }
         }
     }
