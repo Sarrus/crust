@@ -21,6 +21,8 @@
 #include <stdlib.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <string.h>
 #include "client.h"
 #include "terminal.h"
@@ -28,8 +30,15 @@
 
 int crust_client_connect()
 {
+    int yes = 1;
+    int tcpKeepAliveInterval = CRUST_TCP_KEEPALIVE_INTERVAL;
+    int tcpKeepAliveCount = CRUST_TCP_MAX_FAILED_KEEPALIVES;
     int socketFD = socket(AF_INET, SOCK_STREAM, 0);
-    if(socketFD == -1)
+    if(socketFD == -1
+        || setsockopt(socketFD, SOL_SOCKET, SO_KEEPALIVE, (void*)&yes, sizeof(yes))
+        || setsockopt(socketFD, IPPROTO_TCP, TCP_KEEPALIVE, (void*)&tcpKeepAliveInterval, sizeof(tcpKeepAliveInterval))
+        || setsockopt(socketFD, IPPROTO_TCP, TCP_KEEPINTVL, (void*)&tcpKeepAliveInterval, sizeof(tcpKeepAliveInterval))
+        || setsockopt(socketFD, IPPROTO_TCP, TCP_KEEPCNT, (void*)&tcpKeepAliveCount, sizeof(tcpKeepAliveCount)))
     {
         crust_terminal_print("Unable to create socket");
         exit(EXIT_FAILURE);
