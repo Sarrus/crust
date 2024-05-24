@@ -45,13 +45,6 @@ void crust_connection_init(CRUST_CONNECTION * connection)
     connection->didClose = false;
 }
 
-void crust_connection_destroy(CRUST_CONNECTION * connection)
-{
-    free(connection->readBuffer);
-    free(connection->writeBuffer);
-    free(connection);
-}
-
 void crust_connectivity_extend()
 {
     connectivity.connectionListLength++;
