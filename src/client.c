@@ -36,7 +36,13 @@ int crust_client_connect()
     int socketFD = socket(AF_INET, SOCK_STREAM, 0);
     if(socketFD == -1
         || setsockopt(socketFD, SOL_SOCKET, SO_KEEPALIVE, (void*)&yes, sizeof(yes))
-        || setsockopt(socketFD, IPPROTO_TCP, TCP_KEEPALIVE, (void*)&tcpKeepAliveInterval, sizeof(tcpKeepAliveInterval))
+        || setsockopt(socketFD, IPPROTO_TCP,
+#ifdef MACOS
+                TCP_KEEPALIVE,
+#else
+                TCP_KEEPIDLE,
+#endif
+                         (void*)&tcpKeepAliveInterval, sizeof(tcpKeepAliveInterval))
         || setsockopt(socketFD, IPPROTO_TCP, TCP_KEEPINTVL, (void*)&tcpKeepAliveInterval, sizeof(tcpKeepAliveInterval))
         || setsockopt(socketFD, IPPROTO_TCP, TCP_KEEPCNT, (void*)&tcpKeepAliveCount, sizeof(tcpKeepAliveCount)))
     {

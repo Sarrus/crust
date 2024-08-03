@@ -102,7 +102,13 @@ CRUST_CONNECTION * crust_connection_read_write_open(void (*readFunction)(CRUST_C
     pollListEntry->fd = socket(AF_INET, SOCK_STREAM, 0);
     if(pollListEntry->fd == -1
        || setsockopt(pollListEntry->fd, SOL_SOCKET, SO_KEEPALIVE, (void*)&yes, sizeof(yes))
-       || setsockopt(pollListEntry->fd, IPPROTO_TCP, TCP_KEEPALIVE, (void*)&tcpKeepAliveInterval, sizeof(tcpKeepAliveInterval))
+       || setsockopt(pollListEntry->fd, IPPROTO_TCP,
+#ifdef MACOS
+                     TCP_KEEPALIVE,
+#else
+                     TCP_KEEPIDLE,
+#endif
+                     (void*)&tcpKeepAliveInterval, sizeof(tcpKeepAliveInterval))
        || setsockopt(pollListEntry->fd, IPPROTO_TCP, TCP_KEEPINTVL, (void*)&tcpKeepAliveInterval, sizeof(tcpKeepAliveInterval))
        || setsockopt(pollListEntry->fd, IPPROTO_TCP, TCP_KEEPCNT, (void*)&tcpKeepAliveCount, sizeof(tcpKeepAliveCount)))
     {
@@ -152,7 +158,7 @@ void crust_connection_write(CRUST_CONNECTION * connection, char * data)
     }
 
     connection->writeBuffer = realloc(connection->writeBuffer, existingDataSize + newDataSize + 1);
-    strlcat(connection->writeBuffer, data, existingDataSize + newDataSize + 1);
+    strncat(connection->writeBuffer, data, newDataSize + 1);
 }
 
 void crust_connectivity_execute(int timeout)
@@ -233,7 +239,7 @@ void crust_connectivity_execute(int timeout)
                             connectivity.connectionList[i].readBuffer,
                             newConnectivityReadBufferLength);
 
-                    strlcat(connectivity.connectionList[i].readBuffer, localReadBuffer, newConnectivityReadBufferLength);
+                    strncat(connectivity.connectionList[i].readBuffer, localReadBuffer, bytesRead + 1);
 
                     // Tell the program that there is data to read
                     connectivity.connectionList[i].readFunction(&connectivity.connectionList[i]);
@@ -248,7 +254,7 @@ void crust_connectivity_execute(int timeout)
                     else
                     {
                         char * newReadBuffer = malloc(bytesLeft + 1);
-                        strlcpy(newReadBuffer, &connectivity.connectionList[i].readBuffer[connectivity.connectionList[i].readTo], bytesLeft + 1);
+                        strncpy(newReadBuffer, &connectivity.connectionList[i].readBuffer[connectivity.connectionList[i].readTo], bytesLeft + 1);
                         free(connectivity.connectionList[i].readBuffer);
                         connectivity.connectionList[i].readBuffer = newReadBuffer;
                         connectivity.connectionList[i].readTo = 0;
@@ -274,7 +280,7 @@ void crust_connectivity_execute(int timeout)
             {
                 size_t bytesLeft = bytesToWrite - bytesWritten;
                 char * newWriteBuffer = malloc(bytesLeft + 1);
-                strlcpy(newWriteBuffer, &connectivity.connectionList[i].writeBuffer[bytesWritten], bytesLeft + 1);
+                strncpy(newWriteBuffer, &connectivity.connectionList[i].writeBuffer[bytesWritten], bytesLeft + 1);
                 free(connectivity.connectionList[i].writeBuffer);
                 connectivity.connectionList[i].writeBuffer = newWriteBuffer;
             }
