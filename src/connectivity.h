@@ -52,6 +52,7 @@ struct crustConnectivity {
     struct pollfd * pollList;
 };
 
+void crust_connection_write(CRUST_CONNECTION * connection, char * data);
 void crust_connectivity_execute(int timeout);
 CRUST_CONNECTION * crust_connection_read_write_open(void (*readFunction)(CRUST_CONNECTION *),
                                                     void (*openFunction)(CRUST_CONNECTION *),

@@ -55,6 +55,8 @@ int reconnectWaitTimer = -1;
 int keyboardInputPointer = 0;
 static char keyboardInputBuffer[10] = "________\0\0";
 
+CRUST_CONNECTION * serverConnection = NULL;
+
 struct crustLineMapEntry {
     char character;
     unsigned long xPos;
@@ -354,11 +356,17 @@ CRUST_OPCODE crust_window_interpret_message(char * message, CRUST_IDENTIFIER * r
     }
 }
 
-void crust_window_process_input(char * receivedInputBuffer, int connectionFp)
+void crust_window_process_input(char * receivedInputBuffer)
 {
     char headcode[CRUST_HEADCODE_LENGTH + 1];
     unsigned long berth;
     char writeBuffer[CRUST_MAX_MESSAGE_LENGTH];
+
+    if(serverConnection == NULL)
+    {
+        return;
+    }
+
     switch(currentWindowMode)
     {
         case MANUAL_INTERPOSE:
@@ -370,14 +378,14 @@ void crust_window_process_input(char * receivedInputBuffer, int connectionFp)
             receivedInputBuffer[4] = '\0';
             berth = strtoul(receivedInputBuffer, NULL, 10);
             snprintf(writeBuffer, CRUST_MAX_MESSAGE_LENGTH, "IP%li/%s\n", berth, headcode);
-            write(connectionFp, writeBuffer, strlen(writeBuffer));
+            crust_connection_write(serverConnection, writeBuffer);
             break;
 
         case MANUAL_CLEAR:
             receivedInputBuffer[4] = '\0';
             berth = strtoul(receivedInputBuffer, NULL, 10);
             snprintf(writeBuffer, CRUST_MAX_MESSAGE_LENGTH, "IP%li/____\n", berth);
-            write(connectionFp, writeBuffer, strlen(writeBuffer));
+            crust_connection_write(serverConnection, writeBuffer);
             break;
     }
 }
@@ -615,7 +623,7 @@ void crust_window_handle_keyboard()
             }
             if(keyboardInputPointer == 8 || (keyboardInputPointer == 4 && currentWindowMode == MANUAL_CLEAR))
             {
-                //crust_window_process_input(keyboardInputBuffer, pollList[1].fd, currentWindowMode);
+                crust_window_process_input(keyboardInputBuffer);
                 memset(keyboardInputBuffer, '_', CRUST_HEADCODE_LENGTH * 2);
                 keyboardInputPointer = 0;
                 crust_window_enter_mode(HOME);
@@ -721,11 +729,15 @@ void crust_window_receive_read(CRUST_CONNECTION * connection)
 
 void crust_window_receive_open(CRUST_CONNECTION * connection)
 {
+    crust_connection_write(connection, "SL\n");
+    serverConnection = connection;
     crust_window_enter_mode(HOME);
 }
 
 void crust_window_receive_close(CRUST_CONNECTION * connection)
 {
+    serverConnection = NULL;
+
     if(connection->didConnect)
     {
         crust_connection_read_write_open(crust_window_receive_read,
@@ -743,71 +755,8 @@ void crust_window_receive_close(CRUST_CONNECTION * connection)
 
 _Noreturn void crust_window_loop()
 {
-    char readBuffer[CRUST_MAX_MESSAGE_LENGTH];
-    int readPointer = 0;
-
-    CRUST_IDENTIFIER remoteID = 0;
-    char * headcode = NULL;
     for(;;)
     {
-//        // Poll the server and the keyboard
-//        poll(pollList, 2, 1000);
-//
-//        // Handle data from the server
-//        if(pollList[1].revents & POLLHUP)
-//        {
-//            crust_window_enter_mode(mode, DISCONNECTED);
-//            pollList[1].fd = crust_client_connect();
-//            write(pollList[1].fd, "SL\n", 3);
-//            crust_window_enter_mode(mode, HOME);
-//        }
-//        if(pollList[1].revents & POLLRDNORM)
-//        {
-//            // Try to read a character
-//            if(!read(pollList[1].fd, &readBuffer[readPointer], 1))
-//            {
-//                crust_window_print("Server disconnected...", *mode);
-//                sleep(5);
-//                crust_window_stop();
-//            }
-//
-//            // Recognise the end of the message
-//            if(readBuffer[readPointer] == '\n')
-//            {
-//                readBuffer[readPointer] = '\0';
-//                switch(crust_window_interpret_message(readBuffer, &remoteID, &headcode))
-//                {
-//                    case OCCUPY_TRACK_CIRCUIT:
-//                        crust_window_set_occupation(remoteID, true);
-//                        break;
-//
-//                    case CLEAR_TRACK_CIRCUIT:
-//                        crust_window_set_occupation(remoteID, false);
-//                        break;
-//
-//                    case UPDATE_BLOCK:
-//                        crust_window_update_berth(remoteID, headcode);
-//                        break;
-//
-//                    default:
-//
-//                        break;
-//                }
-//                readPointer = 0;
-//            }
-//            else if(readPointer > CRUST_MAX_MESSAGE_LENGTH)
-//            {
-//                crust_window_print("Oversized message...", *mode);
-//                sleep(5);
-//                crust_window_stop();
-//            }
-//            else
-//            {
-//                readPointer++;
-//            }
-//        }
-//
-//
         crust_connectivity_execute(1000);
 
         if(reconnectWaitTimer > 0)
@@ -831,8 +780,6 @@ _Noreturn void crust_window_loop()
 
 _Noreturn void crust_window_run()
 {
-    struct pollfd pollList[2];
-
     // Compile regexes
     crust_window_compile_regexs();
 
@@ -842,16 +789,6 @@ _Noreturn void crust_window_run()
 
     // Load the layout file
     crust_window_load_layout();
-
-//    // Poll stdin for user input
-//    pollList[0].fd = STDIN_FILENO;
-//    pollList[0].events = POLLRDNORM;
-//
-//    // Poll the server for updates
-//    pollList[1].fd = crust_client_connect();
-//    pollList[1].events = POLLRDNORM;
-//
-//    write(pollList[1].fd, "SL\n", 3);
 
     crust_connection_read_write_open(crust_window_receive_read,
                                      crust_window_receive_open,

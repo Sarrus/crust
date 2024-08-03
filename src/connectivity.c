@@ -142,9 +142,34 @@ CRUST_CONNECTION * crust_connection_read_write_open(void (*readFunction)(CRUST_C
     return connection;
 }
 
+void crust_connection_write(CRUST_CONNECTION * connection, char * data)
+{
+    size_t existingDataSize = 0;
+    size_t newDataSize = strlen(data);
+    if(connection->writeBuffer != NULL)
+    {
+        existingDataSize = strlen(connection->writeBuffer);
+    }
+
+    connection->writeBuffer = realloc(connection->writeBuffer, existingDataSize + newDataSize + 1);
+    strlcat(connection->writeBuffer, data, existingDataSize + newDataSize + 1);
+}
+
 void crust_connectivity_execute(int timeout)
 {
     char localReadBuffer[CRUST_MAX_MESSAGE_LENGTH] = "";
+
+    for(int i = 0; i < connectivity.connectionListLength; i++)
+    {
+        // Find connections with writes waiting
+        if(connectivity.connectionList[i].didConnect
+                && !connectivity.connectionList[i].didClose
+                && connectivity.connectionList[i].writeBuffer != NULL)
+        {
+            // Start write polling
+            connectivity.pollList[i].events |= POLLWRNORM;
+        }
+    }
 
     poll(connectivity.pollList, connectivity.connectionListLength, timeout);
 
@@ -224,8 +249,34 @@ void crust_connectivity_execute(int timeout)
                     {
                         char * newReadBuffer = malloc(bytesLeft + 1);
                         strlcpy(newReadBuffer, &connectivity.connectionList[i].readBuffer[connectivity.connectionList[i].readTo], bytesLeft + 1);
+                        free(connectivity.connectionList[i].readBuffer);
+                        connectivity.connectionList[i].readBuffer = newReadBuffer;
+                        connectivity.connectionList[i].readTo = 0;
                     }
                 }
+            }
+        }
+
+        // Handle writes
+        if(connectivity.pollList[i].revents & POLLWRNORM)
+        {
+            size_t bytesToWrite = strlen(connectivity.connectionList[i].writeBuffer);
+            size_t bytesWritten = write(connectivity.pollList[i].fd,
+                                        connectivity.connectionList[i].writeBuffer,
+                                        bytesToWrite);
+            if(bytesToWrite == bytesWritten)
+            {
+                free(connectivity.connectionList[i].writeBuffer);
+                connectivity.connectionList[i].writeBuffer = NULL;
+                connectivity.pollList[i].events &= ~POLLWRNORM; // Stop read polling
+            }
+            else
+            {
+                size_t bytesLeft = bytesToWrite - bytesWritten;
+                char * newWriteBuffer = malloc(bytesLeft + 1);
+                strlcpy(newWriteBuffer, &connectivity.connectionList[i].writeBuffer[bytesWritten], bytesLeft + 1);
+                free(connectivity.connectionList[i].writeBuffer);
+                connectivity.connectionList[i].writeBuffer = newWriteBuffer;
             }
         }
     }
