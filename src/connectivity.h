@@ -24,11 +24,17 @@
 #include <stddef.h>
 #include <poll.h>
 #include <stdbool.h>
+#ifdef GPIO
+#include <gpiod.h>
+#endif
 
 enum crustConnectionType {
     CONNECTION_TYPE_UNDEFINED,
     CONNECTION_TYPE_READ_WRITE,
     CONNECTION_TYPE_SOCKET,
+#ifdef GPIO
+    CONNECTION_TYPE_GPIO_LINE,
+#endif
     CONNECTION_TYPE_KEYBOARD
 };
 
@@ -43,11 +49,12 @@ struct crustConnection{
     char * writeBuffer;
     bool didConnect;
     bool didClose;
+    long long customIdentifier;
 };
 
 #define CRUST_CONNECTIVITY struct crustConnectivity
 struct crustConnectivity {
-    CRUST_CONNECTION * connectionList;
+    CRUST_CONNECTION ** connectionList;
     size_t connectionListLength;
     struct pollfd * pollList;
 };
@@ -61,5 +68,9 @@ CRUST_CONNECTION * crust_connection_read_write_open(void (*readFunction)(CRUST_C
                                                     in_port_t port);
 
 CRUST_CONNECTION * crust_connection_read_keyboard_open(void (*readFunction)(CRUST_CONNECTION *));
+
+#ifdef GPIO
+CRUST_CONNECTION * crust_connection_gpio_open(void (*readFunction)(CRUST_CONNECTION *), struct gpiod_line * gpioLine);
+#endif
 
 #endif //CRUST_CONNECTIVITY_H

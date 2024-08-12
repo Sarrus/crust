@@ -50,12 +50,12 @@ enum crustWindowMode {
 CRUST_WINDOW_MODE currentWindowMode = LOG;
 
 int reconnectWaitTimer = -1;
-#define RECONNECTION_WAIT_TIME 10
+#define CRUST_WINDOW_RECONNECTION_WAIT_TIME 10
 
 int keyboardInputPointer = 0;
 static char keyboardInputBuffer[10] = "________\0\0";
 
-CRUST_CONNECTION * serverConnection = NULL;
+CRUST_CONNECTION * windowServerConnection = NULL;
 
 struct crustLineMapEntry {
     char character;
@@ -362,7 +362,7 @@ void crust_window_process_input(char * receivedInputBuffer)
     unsigned long berth;
     char writeBuffer[CRUST_MAX_MESSAGE_LENGTH];
 
-    if(serverConnection == NULL)
+    if(windowServerConnection == NULL)
     {
         return;
     }
@@ -378,14 +378,14 @@ void crust_window_process_input(char * receivedInputBuffer)
             receivedInputBuffer[4] = '\0';
             berth = strtoul(receivedInputBuffer, NULL, 10);
             snprintf(writeBuffer, CRUST_MAX_MESSAGE_LENGTH, "IP%li/%s\n", berth, headcode);
-            crust_connection_write(serverConnection, writeBuffer);
+            crust_connection_write(windowServerConnection, writeBuffer);
             break;
 
         case MANUAL_CLEAR:
             receivedInputBuffer[4] = '\0';
             berth = strtoul(receivedInputBuffer, NULL, 10);
             snprintf(writeBuffer, CRUST_MAX_MESSAGE_LENGTH, "IP%li/____\n", berth);
-            crust_connection_write(serverConnection, writeBuffer);
+            crust_connection_write(windowServerConnection, writeBuffer);
             break;
     }
 }
@@ -730,13 +730,13 @@ void crust_window_receive_read(CRUST_CONNECTION * connection)
 void crust_window_receive_open(CRUST_CONNECTION * connection)
 {
     crust_connection_write(connection, "SL\n");
-    serverConnection = connection;
+    windowServerConnection = connection;
     crust_window_enter_mode(HOME);
 }
 
 void crust_window_receive_close(CRUST_CONNECTION * connection)
 {
-    serverConnection = NULL;
+    windowServerConnection = NULL;
 
     if(connection->didConnect)
     {
@@ -749,7 +749,7 @@ void crust_window_receive_close(CRUST_CONNECTION * connection)
     }
     else
     {
-        reconnectWaitTimer = RECONNECTION_WAIT_TIME;
+        reconnectWaitTimer = CRUST_WINDOW_RECONNECTION_WAIT_TIME;
     }
 }
 

@@ -32,7 +32,7 @@
 #include "node.h"
 #include "terminal.h"
 #include "config.h"
-#include "client.h"
+#include "connectivity.h"
 #ifdef SYSTEMD
 #include <systemd/sd-daemon.h>
 #endif
@@ -42,6 +42,7 @@
  * for some flickering of the circuit when it changes state and ignores brief spikes / troughs in voltage. Max 1000
  * */
 #define CRUST_NODE_SETTLE_TIME 100 //ms
+#define CRUST_NODE_RECONNECTION_WAIT_TIME 10 //s
 
 #define GPIO_CHIP struct gpiod_chip
 
@@ -53,16 +54,18 @@ struct crustGPIOPinMap {
     bool lastOccupationRead; // The last occupation state read on the line (true = occupied, false = clear)
     bool lastOccupationSent; // The last occupation state sent to the server
     struct timespec lastReadAt; // The time the last read occurred
+    CRUST_CONNECTION * connection;
 };
 
 GPIO_CHIP * gpioChip;
+CRUST_CONNECTION * nodeServerConnection;
+int pinMapLength = 0;
+CRUST_GPIO_PIN_MAP * pinMap = NULL;
+int circuitOccupiedEvent = GPIOD_LINE_EVENT_RISING_EDGE;
+int circuitClearEvent = GPIOD_LINE_EVENT_FALLING_EDGE;
 
-void crust_generate_pin_map_and_poll_list(char * mapText, int * listLength, CRUST_GPIO_PIN_MAP ** pinMap, struct pollfd ** pollList)
+void crust_generate_pin_map(char * mapText)
 {
-    *listLength = 1; // Start at length 1 to leave an empty space for the socket
-    *pinMap = NULL;
-    *pollList = NULL;
-
     char * next, * current, * subNext;
     next = mapText;
     while((current = subNext = strsep(&next, ",")) != NULL)
@@ -92,14 +95,18 @@ void crust_generate_pin_map_and_poll_list(char * mapText, int * listLength, CRUS
             exit(EXIT_FAILURE);
         }
 
-        (*listLength)++;
+        pinMapLength++;
 
-        *pinMap = realloc(*pinMap, (sizeof(CRUST_GPIO_PIN_MAP) * *listLength));
-        pinMap[0][*listLength - 1].pinID = pinNumber;
-        pinMap[0][*listLength - 1].trackCircuitID = trackCircuitNumber;
+        pinMap = realloc(pinMap, (sizeof(CRUST_GPIO_PIN_MAP) * pinMapLength));
+        pinMap[pinMapLength - 1].pinID = pinNumber;
+        pinMap[pinMapLength - 1].trackCircuitID = trackCircuitNumber;
+        pinMap[pinMapLength - 1].gpioLine = NULL;
+        pinMap[pinMapLength - 1].lastOccupationRead = false;
+        pinMap[pinMapLength - 1].lastOccupationSent = false;
+        pinMap[pinMapLength - 1].connection = NULL;
+        pinMap[pinMapLength - 1].lastReadAt.tv_nsec = 0;
+        pinMap[pinMapLength - 1].lastReadAt.tv_sec = 0;
     }
-
-    *pollList = malloc(sizeof(struct pollfd) * *listLength);
 }
 
 _Noreturn void crust_node_stop()
@@ -112,6 +119,60 @@ _Noreturn void crust_node_stop()
     gpiod_chip_close(gpioChip);
 
     exit(EXIT_SUCCESS);
+}
+
+void crust_node_receive_read(CRUST_CONNECTION * connection)
+{
+    struct gpiod_line_event event;
+
+    if(connection != nodeServerConnection)
+    {
+        CRUST_GPIO_PIN_MAP * pin = &pinMap[connection->customIdentifier];
+        gpiod_line_event_read(pin->gpioLine, &event);
+        if(event.event_type == circuitOccupiedEvent)
+        {
+            pin->lastOccupationRead = true;
+        }
+        else if(event.event_type == circuitClearEvent)
+        {
+            pin->lastOccupationRead = false;
+        }
+        clock_gettime(CLOCK_MONOTONIC, &pin->lastReadAt);
+    }
+}
+
+void crust_node_receive_open(CRUST_CONNECTION * connection)
+{
+    if(connection == nodeServerConnection)
+    {
+        crust_terminal_print_verbose("Connected.");
+
+        // Trigger a resend of all circuits
+        for(int i = 0; i < pinMapLength; i++)
+        {
+            int pinValue = gpiod_line_get_value(pinMap[i].gpioLine);
+            pinMap[i].lastOccupationRead = pinValue ^ crustOptionInvertPinLogic;
+            pinMap[i].lastOccupationSent = !pinValue ^ crustOptionInvertPinLogic;
+            pinMap[i].lastReadAt.tv_sec = 0;
+            pinMap[i].lastReadAt.tv_nsec = 0;
+        }
+    }
+}
+
+void crust_node_receive_close(CRUST_CONNECTION * connection)
+{
+    if(connection != nodeServerConnection)
+    {
+        return;
+    }
+    crust_terminal_print_verbose("Connection lost / failed.");
+    sleep(CRUST_NODE_RECONNECTION_WAIT_TIME);
+    crust_terminal_print_verbose("Reconnecting...");
+    nodeServerConnection = crust_connection_read_write_open(crust_node_receive_read,
+                                                  crust_node_receive_open,
+                                                  crust_node_receive_close,
+                                                  crustOptionIPAddress,
+                                                  crustOptionPort);
 }
 
 void crust_node_handle_signal(int signal)
@@ -130,85 +191,63 @@ void crust_node_handle_signal(int signal)
     }
 }
 
-_Noreturn void crust_node_loop(
-        int listLength,
-        CRUST_GPIO_PIN_MAP * pinMap,
-        struct pollfd * pollList,
-        int circuitOccupiedEvent,
-        int circuitClearEvent
-        )
+_Noreturn void crust_node_loop()
 {
     struct timespec now;
-    int pollTimeout = 1; // Set the first poll to time out straight away
-    // pollList[0].fd is the socket connected to the server
+    char messageBuffer[CRUST_MAX_MESSAGE_LENGTH];
+
     for(;;)
     {
-        struct gpiod_line_event event;
-        poll(pollList, listLength, pollTimeout);
-        pollTimeout = -1; // Disable the timeout (then re-enable it below if required)
-        if(pollList[0].revents & POLLHUP)
-        {
-            crust_terminal_print_verbose("CRUST server disconnected.");
-            crust_node_stop();
-        }
-        if((pollList[0].revents & POLLRDNORM) && !read(pollList[0].fd, NULL, 1))
-        {
-            crust_terminal_print_verbose("CRUST server closing connection.");
-            shutdown(pollList[0].fd, SHUT_RDWR);
-        }
         clock_gettime(CLOCK_MONOTONIC, &now);
-        for(int i = 1; i < listLength; i++)
+        long connectivityExecuteTimeout = 0;
+
+        if(nodeServerConnection->didConnect)
         {
-            if(pollList[i].revents)
+            for (int i = 1; i < pinMapLength; i++)
             {
-                gpiod_line_event_read_fd(pollList[i].fd, &event);
-                if(event.event_type == circuitClearEvent)
+                if (pinMap[i].lastOccupationRead != pinMap[i].lastOccupationSent)
                 {
-                    pinMap[i].lastOccupationRead = false;
-                }
-                else if(event.event_type == circuitOccupiedEvent)
-                {
-                    pinMap[i].lastOccupationRead = true;
-                }
-
-                pinMap[i].lastReadAt.tv_sec = now.tv_sec;
-                pinMap[i].lastReadAt.tv_nsec = now.tv_nsec;
-                pollTimeout = CRUST_NODE_SETTLE_TIME; // Set a poll timeout
-            }
-            else if(pinMap[i].lastOccupationRead != pinMap[i].lastOccupationSent)
-            {
-                // Calculate the time since the last read
-                struct timespec difference;
-                difference.tv_sec = now.tv_sec - pinMap[i].lastReadAt.tv_sec;
-                difference.tv_nsec = now.tv_nsec - pinMap[i].lastReadAt.tv_nsec;
-                if(difference.tv_nsec < 0)
-                {
-                    difference.tv_nsec += (long)1e9;
-                    difference.tv_sec--;
-                }
-
-                if(difference.tv_sec || (difference.tv_nsec > (CRUST_NODE_SETTLE_TIME * 1000)))
-                {
-                    if(pinMap[i].lastOccupationRead)
+                    // Calculate the time since the last read
+                    struct timespec difference;
+                    difference.tv_sec = now.tv_sec - pinMap[i].lastReadAt.tv_sec;
+                    difference.tv_nsec = now.tv_nsec - pinMap[i].lastReadAt.tv_nsec;
+                    if (difference.tv_nsec < 0)
                     {
-                        dprintf(pollList[0].fd, "OC%i\n", pinMap[i].trackCircuitID);
+                        difference.tv_nsec += (long) 1e9;
+                        difference.tv_sec--;
                     }
-                    else
+
+                    if (difference.tv_sec || (difference.tv_nsec > (CRUST_NODE_SETTLE_TIME * 1000)))
                     {
-                        dprintf(pollList[0].fd, "CC%i\n", pinMap[i].trackCircuitID);
+                        if (pinMap[i].lastOccupationRead)
+                        {
+                            sprintf(messageBuffer, "OC%i\n", pinMap[i].trackCircuitID);
+                        }
+                        else
+                        {
+                            sprintf(messageBuffer, "CC%i\n", pinMap[i].trackCircuitID);
+                        }
+                        crust_connection_write(nodeServerConnection, messageBuffer);
+                        pinMap[i].lastOccupationSent = pinMap[i].lastOccupationRead;
                     }
-                    pinMap[i].lastOccupationSent = pinMap[i].lastOccupationRead;
+                    else if (!difference.tv_sec)
+                    {
+                        long differenceInMsec = difference.tv_nsec / 1000;
+                        if (!connectivityExecuteTimeout || differenceInMsec < connectivityExecuteTimeout)
+                        {
+                            connectivityExecuteTimeout = differenceInMsec;
+                        }
+                    }
                 }
             }
         }
+
+        crust_connectivity_execute(connectivityExecuteTimeout);
     }
 }
 
 _Noreturn void crust_node_run()
 {
-    int circuitOccupiedEvent = GPIOD_LINE_EVENT_RISING_EDGE;
-    int circuitClearEvent = GPIOD_LINE_EVENT_FALLING_EDGE;
-
     crust_terminal_print_verbose("CRUST node starting...");
 
     crust_terminal_print_verbose("Binding to GPIO chip...");
@@ -258,11 +297,7 @@ _Noreturn void crust_node_run()
         crust_terminal_print("Unable to set the permission bits on the GPIO device, continuing");
     }
 
-    int listLength;
-    CRUST_GPIO_PIN_MAP * pinMap;
-    struct pollfd * pollList;
-
-    crust_generate_pin_map_and_poll_list(crustOptionPinMapString, &listLength, &pinMap, &pollList);
+    crust_generate_pin_map(crustOptionPinMapString);
 
     // If the user has requested inverted pin logic, reverse the event types
     if(crustOptionInvertPinLogic)
@@ -271,7 +306,7 @@ _Noreturn void crust_node_run()
         circuitClearEvent = GPIOD_LINE_EVENT_RISING_EDGE;
     }
 
-    for(int i = 1; i < listLength; i++)
+    for(int i = 0; i < pinMapLength; i++)
     {
         pinMap[i].gpioLine = gpiod_chip_get_line(gpioChip, pinMap[i].pinID);
         if(pinMap[i].gpioLine == NULL)
@@ -299,24 +334,21 @@ _Noreturn void crust_node_run()
         }
         pinMap[i].lastOccupationSent = !pinMap[i].lastOccupationRead;
 
-        pollList[i].fd = gpiod_line_event_get_fd(pinMap[i].gpioLine);
-        if(pollList[i].fd < 0)
-        {
-            crust_terminal_print("Failed to obtain file descriptor for a GPIO line");
-            exit(EXIT_FAILURE);
-        }
+        pinMap[i].connection = crust_connection_gpio_open(crust_node_receive_read, pinMap[i].gpioLine);
 
-        pollList[i].events = POLLIN;
+        pinMap[i].connection->customIdentifier = i;
     }
 
-    // Put the server socket in entry 0 on the poll list
-    pollList[0].fd = crust_client_connect();
-    pollList[0].events = POLLRDNORM;
+    nodeServerConnection = crust_connection_read_write_open(crust_node_receive_read,
+                                                        crust_node_receive_open,
+                                                        crust_node_receive_close,
+                                                        crustOptionIPAddress,
+                                                        crustOptionPort);
 
 #ifdef SYSTEMD
     sd_notify(0, "READY=1\n"
                  "STATUS=CRUST Node running");
 #endif
 
-    crust_node_loop(listLength, pinMap, pollList, circuitOccupiedEvent, circuitClearEvent);
+    crust_node_loop();
 }
