@@ -33,6 +33,7 @@
 #include "state.h"
 #include "config.h"
 #include "messaging.h"
+#include "connectivity.h"
 #ifdef SYSTEMD
 #include <systemd/sd-daemon.h>
 #endif
@@ -43,8 +44,6 @@
 #define CRUST_WRITE struct crustWrite
 #define CRUST_BUFFER_LIST_ENTRY struct crustBufferListEntry
 #define CRUST_MAX_WRITE_QUEUE_LENGTH 5
-
-static int socketFp;
 
 struct crustWrite {
     char * writeBuffer;
@@ -61,14 +60,29 @@ struct crustBufferListEntry {
     bool listening; // Indicates that the user wants state change updates
 };
 
+struct crustSession {
+    CRUST_CONNECTION * connection;
+    bool listening;
+    bool closed;
+};
+
+#define CRUST_SESSION struct crustSession
+
+CRUST_SESSION ** daemonSessionList = NULL;
+size_t daemonSessionListLength = 0;
+
+CRUST_CONNECTION * daemonSocket;
+
+CRUST_STATE * state;
+
 _Noreturn void crust_daemon_stop()
 {
 #ifdef SYSTEMD
     sd_notify(0, "STOPPING=1\n"
                  "STATUS=CRUST Daemon shutting down...");
 #endif
-    crust_terminal_print_verbose("Closing the CRUST socket...");
-    close(socketFp);
+//    crust_terminal_print_verbose("Closing the CRUST socket...");
+//    close(socketFp);
 
     exit(EXIT_SUCCESS);
 }
@@ -89,149 +103,34 @@ void crust_daemon_handle_signal(int signal)
     }
 }
 
-/*
- * Regenerates a buffer and poll pollList. Both should always be the same length as each entry on the poll pollList has a matching
- * entry on the buffer pollList.
- *
- * The poll pollList is a pollList of connections to the CRUST socket. It is formatted to be passed to poll(). Each connection can
- * be readable which means that the user is trying to send us some data or writable which means that the user is ready to
- * receive some data from us.
- *
- * CRUST watches all connections for readability and processes instructions as they come in.
- *
- * CRUST only watches connections for writeability when it has some data to write. When there is no data to write, CRUST
- * stops polling the connection for writeability.
- *
- * The buffer pollList contains a read buffer for each connection. The read buffer is a chunk of memory that contains an
- * operation for CRUST to process. The user fills this buffer by writing to their connection. When they send an LF CRUST
- * executes the operation and resets the buffer.
- *
- * The buffer pollList also contains a queue of CRUST_WRITEs for the connection. While there are writes in the queue, CRUST will
- * send them to the connection whenever it is ready to be written to.
- */
-void crust_poll_list_and_buffer_list_regen(struct pollfd ** pollList, int * listLength, int * listPointer,
-                                           CRUST_BUFFER_LIST_ENTRY **bufferList)
+void crust_daemon_session_init(CRUST_SESSION * session)
 {
-    crust_terminal_print_verbose("Regenerating poll pollList...");
-
-    // On each regen we leave space for 100 new connections
-    int newListLength = 100;
-
-    // Take our 100 new spaces and then add an additional one for each existing connection. (We don't count disconnected
-    // sockets which have a negative fd)
-    for(int i = 0; i < *listPointer; i++)
-    {
-        if((*pollList)[i].fd > 0)
-        {
-            newListLength++;
-        }
-    }
-
-    // Allocate the memory for the two new lists
-    struct pollfd * newPollList = malloc(sizeof(struct pollfd) * newListLength);
-    CRUST_BUFFER_LIST_ENTRY * newBufferList = malloc(sizeof(CRUST_BUFFER_LIST_ENTRY) * newListLength);
-
-    // Empty the two new lists
-    memset(newPollList, '\0', sizeof(struct pollfd) * newListLength);
-    memset(newBufferList, '\0', sizeof(CRUST_BUFFER_LIST_ENTRY) * newListLength);
-
-    // Add the CRUST socket to the top of the pollList and set it to read. poll() will mark it as readable when a new connection
-    // is available.
-    newPollList[0].fd = socketFp;
-    newPollList[0].events = POLLRDBAND | POLLRDNORM;
-
-    // Point to the next free entry
-    int newListPointer = 1;
-
-    // Copy each active entry from both of the old lists to both of the new lists.
-    for(int i = 1; i < *listPointer; i++)
-    {
-        if((*pollList)[i].fd > 0)
-        {
-            newPollList[newListPointer].fd = (*pollList)[i].fd;
-            newPollList[newListPointer].events = (*pollList)[i].events;
-            newBufferList[newListPointer].inputBuffer.writePointer = (*bufferList)[i].inputBuffer.writePointer;
-            newBufferList[newListPointer].writeQueueArrival = (*bufferList)[i].writeQueueArrival;
-            newBufferList[newListPointer].writeQueueService = (*bufferList)[i].writeQueueService;
-            newBufferList[newListPointer].currentWritePositionPointer = (*bufferList)[i].currentWritePositionPointer;
-            for(int j = 0; j < CRUST_MAX_MESSAGE_LENGTH; j++)
-            {
-                newBufferList[newListPointer].inputBuffer.buffer[j] = (*bufferList)[i].inputBuffer.buffer[j];
-            }
-            for(int j = 0; j < CRUST_MAX_WRITE_QUEUE_LENGTH; j++)
-            {
-                newBufferList[newListPointer].writeQueue[j] = (*bufferList)[i].writeQueue[j];
-            }
-            newListPointer++;
-        }
-    }
-
-    // If we are replacing an existing pair of lists then free their associated memory
-    if(*pollList)
-    {
-        free(*pollList);
-    }
-    if(*bufferList)
-    {
-        free(*bufferList);
-    }
-
-    // Point to the new lists
-    *pollList = newPollList;
-    *listLength = newListLength;
-    *listPointer = newListPointer;
-    *bufferList = newBufferList;
+    session->connection = NULL;
+    session->listening = false;
+    session->closed = false;
 }
 
-void crust_close_connection(struct pollfd * pollList, CRUST_BUFFER_LIST_ENTRY * bufferList, int listEntryID)
+void crust_daemon_session_list_extend()
 {
-    shutdown(pollList[listEntryID].fd, SHUT_RDWR);
-    close(pollList[listEntryID].fd);
-    pollList[listEntryID].fd = -(pollList[listEntryID].fd);
-    pollList[listEntryID].revents = 0;
-    bufferList[listEntryID].listening = false;
-}
-
-void crust_write_queue_insert(struct pollfd * pollList, CRUST_BUFFER_LIST_ENTRY * bufferList, int listEntryID,
-                                CRUST_WRITE * writeToInsert)
-{
-    // Check that the write queue isn't full
-    if((bufferList[listEntryID].writeQueueArrival + 1) % CRUST_MAX_WRITE_QUEUE_LENGTH == bufferList[listEntryID].writeQueueService)
+    daemonSessionListLength++;
+    daemonSessionList = realloc(daemonSessionList, sizeof(CRUST_SESSION *) * daemonSessionListLength);
+    if(daemonSessionList == NULL)
     {
-        crust_terminal_print_verbose("Write queue filled, terminating connection");
-        crust_close_connection(pollList, bufferList, listEntryID);
-        // TODO: If there are no other connections waiting for this CRUST_WRITE, free() the write.
-        return;
+        crust_terminal_print("Memory allocation error.");
+        exit(EXIT_FAILURE);
     }
-
-    // Add the new entry to the queue
-    bufferList[listEntryID].writeQueue[bufferList[listEntryID].writeQueueArrival] = writeToInsert;
-
-    // Update queue pointers
-    (bufferList[listEntryID].writeQueueArrival)++;
-    bufferList[listEntryID].writeQueueArrival %= CRUST_MAX_WRITE_QUEUE_LENGTH;
-
-    // Update count of targets
-    (writeToInsert->targets)++;
-
-    // Enable listening for writes
-    pollList[listEntryID].events |= (POLLWRBAND | POLLWRNORM);
+    daemonSessionList[daemonSessionListLength - 1] = malloc(sizeof(CRUST_SESSION));
+    crust_daemon_session_init(daemonSessionList[daemonSessionListLength - 1]);
 }
 
-void crust_write_to_listeners(struct pollfd * pollList, CRUST_BUFFER_LIST_ENTRY * bufferList, int listLength,
-                              CRUST_WRITE * write)
+void crust_write_to_listeners(char * message)
 {
-    for(int i = 1; i < listLength; i++)
+    for(int i = 0; i < daemonSessionListLength; i++)
     {
-        if(bufferList[i].listening)
+        if(daemonSessionList[i]->listening && !(daemonSessionList[i]->closed))
         {
-            crust_write_queue_insert(pollList, bufferList, i, write);
+            crust_connection_write(daemonSessionList[i]->connection, message);
         }
-    }
-
-    if(!(write->targets))
-    {
-        free(write);
     }
 }
 
@@ -240,7 +139,7 @@ void crust_write_to_listeners(struct pollfd * pollList, CRUST_BUFFER_LIST_ENTRY 
  * to go with the operation, fills operationInput. See CRUST_MIXED_OPERATION_INPUT for details. If the opcode is not
  * recognised or there is an error, returns NO_OPERATION.
  */
-CRUST_OPCODE crust_daemon_interpret_message(char * message, CRUST_MIXED_OPERATION_INPUT * operationInput, CRUST_STATE * state)
+CRUST_OPCODE crust_daemon_interpret_message(char * message, CRUST_MIXED_OPERATION_INPUT * operationInput)
 {
     // Return NOP if the message is too short
     if(strlen(message) < 2)
@@ -369,14 +268,14 @@ CRUST_OPCODE crust_daemon_interpret_message(char * message, CRUST_MIXED_OPERATIO
     }
 }
 
-void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPUT * operationInput, CRUST_STATE * state,
-                                struct pollfd * pollList, CRUST_BUFFER_LIST_ENTRY * bufferList, int listPosition, int listLength)
+void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPUT * operationInput, CRUST_SESSION * session)
 {
     CRUST_WRITE * write;
     CRUST_TRACK_CIRCUIT * identifiedTrackCircuit;
     CRUST_BLOCK * identifiedBlock;
     CRUST_BLOCK ** affectedBlocks = NULL;
     size_t affectedBlockCount = 0;
+    char * writeBuffer;
 
     // Process the user's operation
     switch(opcode)
@@ -388,11 +287,10 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
             {
                 case 0:
                     crust_terminal_print_verbose("Block inserted successfully");
-                    write = malloc(sizeof(CRUST_WRITE));
-                    write->writeBuffer = malloc(CRUST_MAX_MESSAGE_LENGTH);
-                    write->targets = 0;
-                    write->bufferLength = crust_print_block(operationInput->block, &write->writeBuffer);
-                    crust_write_to_listeners(pollList, bufferList, listLength, write);
+                    crust_print_block(operationInput->block, &writeBuffer);
+                    crust_write_to_listeners(writeBuffer);
+                    free(writeBuffer);
+                    writeBuffer = NULL;
                     break;
 
                 case 1:
@@ -439,10 +337,10 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
             {
                 case 0:
                     crust_terminal_print_verbose("Track circuit inserted successfully.");
-                    write = malloc(sizeof(CRUST_WRITE));
-                    write->targets = 0;
-                    write->bufferLength = crust_print_track_circuit(operationInput->trackCircuit, &write->writeBuffer);
-                    crust_write_to_listeners(pollList, bufferList, listLength, write);
+                    crust_print_track_circuit(operationInput->trackCircuit, &writeBuffer);
+                    crust_write_to_listeners(writeBuffer);
+                    free(writeBuffer);
+                    writeBuffer = NULL;
                     break;
 
                 case 1:
@@ -467,10 +365,10 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
             // Resend the entire state to the user
         case RESEND_STATE:
             crust_terminal_print_verbose("OPCODE: Resend State");
-            write = malloc(sizeof(CRUST_WRITE));
-            write->bufferLength = crust_print_state(state, &write->writeBuffer);
-            write->targets = 0;
-            crust_write_queue_insert(pollList, bufferList, listPosition, write);
+            crust_print_state(state, &writeBuffer);
+            crust_connection_write(session->connection, writeBuffer);
+            free(writeBuffer);
+            writeBuffer = NULL;
             break;
 
 #ifdef TESTING
@@ -487,11 +385,11 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
             // Send the state then send updates as it changes.
         case START_LISTENING:
             crust_terminal_print_verbose("OPCODE: Start Listening");
-            write = malloc(sizeof(CRUST_WRITE));
-            write->bufferLength = crust_print_state(state, &write->writeBuffer);
-            write->targets = 0;
-            crust_write_queue_insert(pollList, bufferList, listPosition, write);
-            bufferList[listPosition].listening = true;
+            crust_print_state(state, &writeBuffer);
+            crust_connection_write(session->connection, writeBuffer);
+            free(writeBuffer);
+            writeBuffer = NULL;
+            session->listening = true;
             break;
 
         case CLEAR_TRACK_CIRCUIT:
@@ -499,10 +397,10 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
             if(crust_track_circuit_get(operationInput->identifier, &identifiedTrackCircuit, state)
                && crust_track_circuit_set_occupation(identifiedTrackCircuit, false, state))
             {
-                write = malloc(sizeof(CRUST_WRITE));
-                write->targets = 0;
-                write->bufferLength = crust_print_track_circuit(identifiedTrackCircuit, &write->writeBuffer);
-                crust_write_to_listeners(pollList, bufferList, listLength, write);
+                crust_print_track_circuit(identifiedTrackCircuit, &writeBuffer);
+                crust_write_to_listeners(writeBuffer);
+                free(writeBuffer);
+                writeBuffer = NULL;
             }
             break;
 
@@ -511,17 +409,17 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
             if(crust_track_circuit_get(operationInput->identifier, &identifiedTrackCircuit, state)
                && crust_track_circuit_set_occupation(identifiedTrackCircuit, true, state))
             {
-                write = malloc(sizeof(CRUST_WRITE));
-                write->targets = 0;
-                write->bufferLength = crust_print_track_circuit(identifiedTrackCircuit, &write->writeBuffer);
-                crust_write_to_listeners(pollList, bufferList, listLength, write);
+                crust_print_track_circuit(identifiedTrackCircuit, &writeBuffer);
+                crust_write_to_listeners(writeBuffer);
+                free(writeBuffer);
+                writeBuffer = NULL;
                 affectedBlockCount = crust_headcode_auto_advance(identifiedTrackCircuit, &affectedBlocks, state);
                 for(int i = 0; i < affectedBlockCount; i++)
                 {
-                    write = malloc(sizeof(CRUST_WRITE));
-                    write->targets = 0;
-                    write->bufferLength = crust_print_block(affectedBlocks[i], &write->writeBuffer);
-                    crust_write_to_listeners(pollList, bufferList, listLength, write);
+                    crust_print_block(affectedBlocks[i], &writeBuffer);
+                    crust_write_to_listeners(writeBuffer);
+                    free(writeBuffer);
+                    writeBuffer = NULL;
                 }
                 free(affectedBlocks);
                 affectedBlocks = NULL;
@@ -534,11 +432,10 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
             if(crust_block_get(operationInput->identifier, &identifiedBlock, state)
                 && crust_enable_berth(identifiedBlock, UP, state))
             {
-                write = malloc(sizeof(CRUST_WRITE));
-                write->writeBuffer = malloc(CRUST_MAX_MESSAGE_LENGTH);
-                write->targets = 0;
-                write->bufferLength = crust_print_block(identifiedBlock, &write->writeBuffer);
-                crust_write_to_listeners(pollList, bufferList, listLength, write);
+                crust_print_block(identifiedBlock, &writeBuffer);
+                crust_write_to_listeners(writeBuffer);
+                free(writeBuffer);
+                writeBuffer = NULL;
             }
             break;
 
@@ -547,11 +444,10 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
             if(crust_block_get(operationInput->identifier, &identifiedBlock, state)
                && crust_enable_berth(identifiedBlock, DOWN, state))
             {
-                write = malloc(sizeof(CRUST_WRITE));
-                write->writeBuffer = malloc(CRUST_MAX_MESSAGE_LENGTH);
-                write->targets = 0;
-                write->bufferLength = crust_print_block(identifiedBlock, &write->writeBuffer);
-                crust_write_to_listeners(pollList, bufferList, listLength, write);
+                crust_print_block(identifiedBlock, &writeBuffer);
+                crust_write_to_listeners(writeBuffer);
+                free(writeBuffer);
+                writeBuffer = NULL;
             }
             break;
 
@@ -568,11 +464,10 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
                 break;
             }
 
-            write = malloc(sizeof(CRUST_WRITE));
-            write->writeBuffer = malloc(CRUST_MAX_MESSAGE_LENGTH);
-            write->targets = 0;
-            write->bufferLength = crust_print_block(identifiedBlock, &write->writeBuffer);
-            crust_write_to_listeners(pollList, bufferList, listLength, write);
+            crust_print_block(identifiedBlock, &writeBuffer);
+            crust_write_to_listeners(writeBuffer);
+            free(writeBuffer);
+            writeBuffer = NULL;
             break;
 
             // Do nothing
@@ -587,151 +482,42 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
     }
 }
 
-_Noreturn void crust_daemon_loop(CRUST_STATE * state)
+void crust_daemon_handle_socket_connection(CRUST_CONNECTION * connection)
 {
-    // TODO: Limit the size of the poll list
-    // Create a poll list and a buffer list
-    struct pollfd * pollList = NULL;
-    int pollListLength = 0;
-    int pollListPointer = 0;
-    CRUST_BUFFER_LIST_ENTRY * bufferList = NULL;
-    crust_poll_list_and_buffer_list_regen(&pollList, &pollListLength, &pollListPointer, &bufferList);
+    crust_terminal_print_verbose("New client connection accepted.");
+    crust_daemon_session_list_extend();
+    daemonSessionList[daemonSessionListLength - 1]->connection = connection;
+    connection->customIdentifier = (long long)daemonSessionListLength - 1;
+}
 
+void crust_daemon_handle_read(CRUST_CONNECTION * connection)
+{
+    size_t readBufferLength = strlen(connection->readBuffer);
+    for(size_t i = 0; i < readBufferLength; i++)
+    {
+        if(connection->readBuffer[i] == '\n')
+        {
+            connection->readBuffer[i] = '\0';
+            CRUST_MIXED_OPERATION_INPUT operationInput;
+            CRUST_OPCODE opcode = crust_daemon_interpret_message(connection->readBuffer, &operationInput);
+            crust_daemon_process_opcode(opcode, &operationInput, daemonSessionList[connection->customIdentifier]);
+            connection->readTo = i;
+        }
+    }
+}
+
+void crust_daemon_handle_close(CRUST_CONNECTION * connection)
+{
+    crust_terminal_print_verbose("Client connection closed.");
+    daemonSessionList[connection->customIdentifier]->closed = true;
+    daemonSessionList[connection->customIdentifier]->connection = NULL;
+}
+
+_Noreturn void crust_daemon_loop()
+{
     for(;;)
     {
-        // Poll. This will block until a socket becomes readable and / or a new connection is made.
-        int pollResult = poll(&pollList[0], pollListPointer, -1);
-        if(pollResult == -1)
-        {
-            crust_terminal_print("Error occurred while polling connections.");
-            exit(EXIT_FAILURE);
-        }
-
-        // Go through all the connections (except the socket itself)
-        for(int i = 1; i < pollListPointer; i++)
-        {
-            // deactivate the connection in the poll list if it hangs up
-            if(pollList[i].revents & POLLHUP)
-            {
-                crust_terminal_print_verbose("Connection terminated.");
-                crust_close_connection(pollList, bufferList, i);
-            }
-            // Receive some data if the socket is ready to be read
-            else if(pollList[i].revents & (POLLRDBAND | POLLRDNORM))
-            {
-                // Calculate how many bytes we can read
-                unsigned int bufferSpaceRemaining = CRUST_MAX_MESSAGE_LENGTH - bufferList[i].inputBuffer.writePointer - 1; // -1 to ensure there is always space for a null terminator
-
-                // Proceed if we have space to buffer the bytes
-                if(bufferSpaceRemaining)
-                {
-                    // Read one byte at a time
-                    size_t readBytes = read(pollList[i].fd, &bufferList[i].inputBuffer.buffer[bufferList[i].inputBuffer.writePointer], 1);
-
-                    // If we get 0 bytes (EOF), it means that the other end is closing the connection, we should do the same
-                    if(!readBytes)
-                    {
-                        shutdown(pollList[i].fd, SHUT_RDWR);
-                    }
-
-                    // Set the write pointer to the start of the remaining free space
-                    bufferList[i].inputBuffer.writePointer += readBytes;
-
-                    // If there are bytes in the buffer and the user has sent a LF at the end then process the buffer
-                    if(bufferList[i].inputBuffer.writePointer > 1
-                        && bufferList[i].inputBuffer.buffer[bufferList[i].inputBuffer.writePointer - 1] == '\n')
-                    {
-                        // Terminate the buffer
-                        bufferList[i].inputBuffer.buffer[bufferList[i].inputBuffer.writePointer -1 ] = '\0';
-
-                        // Interpret the message from the user, splitting it into an opcode and optionally some input
-                        CRUST_MIXED_OPERATION_INPUT operationInput;
-                        CRUST_OPCODE opcode = crust_daemon_interpret_message(bufferList[i].inputBuffer.buffer,
-                                                                             &operationInput,
-                                                                             state);
-
-                        crust_daemon_process_opcode(opcode, &operationInput, state, pollList, bufferList, i, pollListLength);
-
-                        // Put the write pointer back to the beginning (clear the buffer)
-                        bufferList[i].inputBuffer.writePointer = 0;
-                    }
-                }
-                else
-                {
-                    //TODO: Deal with a full buffer
-                }
-            }
-            else if(pollList[i].revents & (POLLWRBAND | POLLWRNORM))
-            {
-                // Go through the write queue in order
-                for(;;)
-                {
-                    // Attempt a write
-                    ssize_t bytesWritten = write(pollList[i].fd,
-                  bufferList[i].writeQueue[bufferList[i].writeQueueService]->writeBuffer + bufferList[i].currentWritePositionPointer,
-                bufferList[i].writeQueue[bufferList[i].writeQueueService]->bufferLength - bufferList[i].currentWritePositionPointer);
-
-                    // If no bytes can be written then stop and let the connection get re-polled
-                    if(bytesWritten < 1)
-                    {
-                        break;
-                    }
-
-                    bufferList[i].currentWritePositionPointer += bytesWritten;
-
-                    // If the write succeeds completely, drop it from the queue and try the next entry
-                    if(bufferList[i].currentWritePositionPointer == bufferList[i].writeQueue[bufferList[i].writeQueueService]->bufferLength)
-                    {
-                        (bufferList[i].writeQueue[bufferList[i].writeQueueService]->targets)--;
-                        if(!bufferList[i].writeQueue[bufferList[i].writeQueueService]->targets)
-                        {
-                            free(bufferList[i].writeQueue[bufferList[i].writeQueueService]);
-                        }
-                        bufferList[i].currentWritePositionPointer = 0;
-                        (bufferList[i].writeQueueService)++;
-                        bufferList[i].writeQueueService %= CRUST_MAX_WRITE_QUEUE_LENGTH;
-                    }
-                    // If all writes complete, unflag the connection for writing.
-                    if(bufferList[i].writeQueueArrival == bufferList[i].writeQueueService)
-                    {
-                        pollList[i].events ^= (POLLWRBAND | POLLWRNORM);
-                        break;
-                    }
-                }
-            }
-        }
-
-        // pollList[0] always contains the CRUST socket. This will show up as readable when a new connection is available
-        if(pollList[0].revents & (POLLRDBAND | POLLRDNORM))
-        {
-            // Accept the new connection and store it's fp
-            int newSocketFp = accept(socketFp, NULL, 0);
-            if(newSocketFp == -1)
-            {
-                crust_terminal_print("Failed to accept a socket connection.");
-                exit(EXIT_FAILURE);
-            }
-
-            // Set the connection to non-blocking
-            if(fcntl(newSocketFp, F_SETFL, fcntl(newSocketFp, F_GETFL) | O_NONBLOCK) == -1)
-            {
-                crust_terminal_print("Unable to make the new socket non-blocking.");
-                exit(EXIT_FAILURE);
-            }
-
-            // The poll list needs to be regenerated if we run out of space.
-            if(pollListLength <= pollListPointer)
-            {
-                crust_poll_list_and_buffer_list_regen(&pollList, &pollListLength, &pollListPointer, &bufferList);
-            }
-
-            // Add the new connection to the poll list and request an alert if it becomes readable. (We will also be
-            // informed if the other end hangs up.)
-            pollList[pollListPointer].fd = newSocketFp;
-            pollList[pollListPointer].events = POLLRDBAND | POLLRDNORM;
-            pollListPointer++;
-            crust_terminal_print_verbose("New connection accepted.");
-        }
+        crust_connectivity_execute(-1);
     }
 }
 
@@ -754,47 +540,11 @@ _Noreturn void crust_daemon_run()
 
     crust_terminal_print_verbose("Creating CRUST socket...");
 
-    // Request a socket from the kernel
-    socketFp = socket(PF_INET, SOCK_STREAM, 0);
-    if(socketFp == -1)
-    {
-        crust_terminal_print("Failed to create CRUST socket.");
-        exit(EXIT_FAILURE);
-    }
-
-    // Declare a structure to hold the socket address
-    struct sockaddr_in address;
-
-    // Empty the structure
-    memset(&address, '\0', sizeof(struct sockaddr_in));
-
-    // Fill the structure
-    address.sin_family = AF_INET;
-    address.sin_port = htons(crustOptionPort);
-    address.sin_addr.s_addr = crustOptionIPAddress;
-#ifdef MACOS
-    address.sin_len = sizeof(struct sockaddr_in);
-#endif
-
-    // Allow the socket to re-use an address from a previous instance of CRUST
-    int yes = 1;
-    if(setsockopt(socketFp, SOL_SOCKET, SO_REUSEADDR, (void*)&yes, sizeof(yes)))
-    {
-        crust_terminal_print("Failed to enable address reuse on the socket.");
-        exit(EXIT_FAILURE);
-    }
-
-    // Bind to the interface
-    if(bind(socketFp, (struct sockaddr *) &address, sizeof(address)) == -1)
-    {
-        if(errno == EACCES)
-        {
-            crust_terminal_print("Unable to bind to interface - permission denied. ");
-            exit(EXIT_FAILURE);
-        }
-        crust_terminal_print("Failed to bind to interface.");
-        exit(EXIT_FAILURE);
-    }
+    daemonSocket = crust_connection_socket_open(crust_daemon_handle_read,
+                                                crust_daemon_handle_socket_connection,
+                                                crust_daemon_handle_close,
+                                                crustOptionIPAddress,
+                                                crustOptionPort);
 
     if(crustOptionSetUser)
     {
@@ -810,29 +560,15 @@ _Noreturn void crust_daemon_run()
     signal(SIGINT, crust_daemon_handle_signal);
     signal(SIGTERM, crust_daemon_handle_signal);
 
-    // Make the socket non-blocking
-    if(fcntl(socketFp, F_SETFD, fcntl(socketFp, F_GETFD) | O_NONBLOCK) == -1)
-    {
-        crust_terminal_print("Unable to make the CRUST socket non-blocking.");
-        exit(EXIT_FAILURE);
-    }
-
     crust_terminal_print_verbose("Building initial state...");
 
-    CRUST_STATE * state;
-    crust_state_init(&state);
 
-    // Start accepting connections
-    if(listen(socketFp, CRUST_SOCKET_QUEUE_LIMIT))
-    {
-        crust_terminal_print("Failed to enable listening on the CRUST socket.");
-        exit(EXIT_FAILURE);
-    }
+    crust_state_init(&state);
 
 #ifdef SYSTEMD
     sd_notify(0, "READY=1\n"
                  "STATUS=CRUST Daemon running");
 #endif
 
-    crust_daemon_loop(state);
+    crust_daemon_loop();
 }

@@ -44,6 +44,7 @@ void crust_connection_init(CRUST_CONNECTION * connection)
     connection->didConnect = false;
     connection->didClose = false;
     connection->customIdentifier = 0;
+    connection->parentSocket = NULL;
 }
 
 void crust_connectivity_extend()
@@ -160,6 +161,120 @@ CRUST_CONNECTION * crust_connection_read_write_open(void (*readFunction)(CRUST_C
     return connection;
 }
 
+CRUST_CONNECTION * crust_connection_socket_accept(CRUST_CONNECTION * socket, int fd)
+{
+    // Prepare memory to hold the connection
+    crust_connectivity_extend();
+    CRUST_CONNECTION * connection = connectivity.connectionList[connectivity.connectionListLength - 1];
+    struct pollfd * pollListEntry = &connectivity.pollList[connectivity.connectionListLength - 1];
+    connection->type = CONNECTION_TYPE_READ_WRITE;
+    connection->readFunction = socket->readFunction;
+    connection->closeFunction = socket->closeFunction;
+
+    pollListEntry->fd = accept(fd, NULL, 0);
+
+    // Inherit socket functions
+    connection->readFunction = socket->readFunction;
+    connection->closeFunction = socket->closeFunction;
+
+    connection->parentSocket = socket;
+
+    // Already connected because we are accepting
+    connection->didConnect = true;
+    pollListEntry->events = POLLHUP | POLLRDNORM;
+
+    return connection;
+}
+
+CRUST_CONNECTION * crust_connection_socket_open(void (*readFunction)(CRUST_CONNECTION *),
+                                                    void (*openFunction)(CRUST_CONNECTION *),
+                                                    void (*closeFunction)(CRUST_CONNECTION *),
+                                                    in_addr_t address,
+                                                    in_port_t port)
+{
+    // Prepare memory to hold the socket
+    crust_connectivity_extend();
+    CRUST_CONNECTION * connection = connectivity.connectionList[connectivity.connectionListLength - 1];
+    struct pollfd * pollListEntry = &connectivity.pollList[connectivity.connectionListLength - 1];
+    connection->type = CONNECTION_TYPE_SOCKET;
+    connection->readFunction = readFunction; // This is set as the read function on any new connection that opens
+    connection->openFunction = openFunction; // This is called when a new connection opens
+    connection->closeFunction = closeFunction; // This is set as the write function on any new connection that opens
+
+    // Request a socket from the kernel
+    int yes = 1;
+    int tcpKeepAliveInterval = CRUST_TCP_KEEPALIVE_INTERVAL;
+    int tcpKeepAliveCount = CRUST_TCP_MAX_FAILED_KEEPALIVES;
+    pollListEntry->fd = socket(PF_INET, SOCK_STREAM, 0);
+    if(pollListEntry->fd == -1
+       || setsockopt(pollListEntry->fd, SOL_SOCKET, SO_KEEPALIVE, (void*)&yes, sizeof(yes))
+       || setsockopt(pollListEntry->fd, IPPROTO_TCP,
+#ifdef MACOS
+                     TCP_KEEPALIVE,
+#else
+                     TCP_KEEPIDLE,
+#endif
+                     (void*)&tcpKeepAliveInterval, sizeof(tcpKeepAliveInterval))
+       || setsockopt(pollListEntry->fd, IPPROTO_TCP, TCP_KEEPINTVL, (void*)&tcpKeepAliveInterval, sizeof(tcpKeepAliveInterval))
+       || setsockopt(pollListEntry->fd, IPPROTO_TCP, TCP_KEEPCNT, (void*)&tcpKeepAliveCount, sizeof(tcpKeepAliveCount)))
+    {
+        crust_terminal_print("Failed to create CRUST socket.");
+        exit(EXIT_FAILURE);
+    }
+
+    // Declare a structure to hold the socket addressConfig
+    struct sockaddr_in addressConfig;
+
+    // Empty the structure
+    memset(&addressConfig, '\0', sizeof(struct sockaddr_in));
+
+    // Fill the structure
+    addressConfig.sin_family = AF_INET;
+    addressConfig.sin_port = htons(port);
+    addressConfig.sin_addr.s_addr = address;
+#ifdef MACOS
+    addressConfig.sin_len = sizeof(struct sockaddr_in);
+#endif
+
+    // Allow the socket to re-use an addressConfig from a previous instance of CRUST
+    if(setsockopt(pollListEntry->fd, SOL_SOCKET, SO_REUSEADDR, (void*)&yes, sizeof(yes)))
+    {
+        crust_terminal_print("Failed to enable addressConfig reuse on the socket.");
+        exit(EXIT_FAILURE);
+    }
+
+    // Bind to the interface
+    if(bind(pollListEntry->fd, (struct sockaddr *) &addressConfig, sizeof(addressConfig)) == -1)
+    {
+        if(errno == EACCES)
+        {
+            crust_terminal_print("Unable to bind to interface - permission denied. ");
+            exit(EXIT_FAILURE);
+        }
+        crust_terminal_print("Failed to bind to interface.");
+        exit(EXIT_FAILURE);
+    }
+
+    // Make the socket non-blocking
+    if(fcntl(pollListEntry->fd, F_SETFD, fcntl(pollListEntry->fd, F_GETFD) | O_NONBLOCK) == -1)
+    {
+        crust_terminal_print("Unable to make the CRUST socket non-blocking.");
+        exit(EXIT_FAILURE);
+    }
+
+    // Start accepting connections
+    if(listen(pollListEntry->fd, CRUST_SOCKET_QUEUE_LIMIT))
+    {
+        crust_terminal_print("Failed to enable listening on the CRUST socket.");
+        exit(EXIT_FAILURE);
+    }
+
+    // Enable read polling on the socket. This will let us poll for connections.
+    pollListEntry->events = POLLRDNORM;
+
+    return connection;
+}
+
 #ifdef GPIO
 CRUST_CONNECTION * crust_connection_gpio_open(void (*readFunction)(CRUST_CONNECTION *), struct gpiod_line * gpioLine)
 {
@@ -240,10 +355,16 @@ void crust_connectivity_execute(int timeout)
             connectivity.pollList[i].events |= POLLRDNORM; // Start read polling
         }
 
-        // Handle reads
+        // Handle reads and new inbounds
         if(connectivity.pollList[i].revents & POLLRDNORM)
         {
-            if(connectivity.connectionList[i]->type == CONNECTION_TYPE_KEYBOARD)
+            // Handle new inbound connections opening
+            if(connectivity.connectionList[i]->type == CONNECTION_TYPE_SOCKET)
+            {
+                CRUST_CONNECTION * newConnection = crust_connection_socket_accept(connectivity.connectionList[i], connectivity.pollList[i].fd);
+                connectivity.connectionList[i]->openFunction(newConnection);
+            }
+            else if(connectivity.connectionList[i]->type == CONNECTION_TYPE_KEYBOARD)
             {
                 // Run the read function to show that keyboard data is available (don't actually read it, let ncurses do that)
                 connectivity.connectionList[i]->readFunction(connectivity.connectionList[i]);

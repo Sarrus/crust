@@ -50,6 +50,7 @@ struct crustConnection{
     bool didConnect;
     bool didClose;
     long long customIdentifier;
+    CRUST_CONNECTION * parentSocket;
 };
 
 #define CRUST_CONNECTIVITY struct crustConnectivity
@@ -68,6 +69,11 @@ CRUST_CONNECTION * crust_connection_read_write_open(void (*readFunction)(CRUST_C
                                                     in_port_t port);
 
 CRUST_CONNECTION * crust_connection_read_keyboard_open(void (*readFunction)(CRUST_CONNECTION *));
+CRUST_CONNECTION * crust_connection_socket_open(void (*readFunction)(CRUST_CONNECTION *),
+                                                void (*openFunction)(CRUST_CONNECTION *),
+                                                void (*closeFunction)(CRUST_CONNECTION *),
+                                                in_addr_t address,
+                                                in_port_t port);
 
 #ifdef GPIO
 CRUST_CONNECTION * crust_connection_gpio_open(void (*readFunction)(CRUST_CONNECTION *), struct gpiod_line * gpioLine);
