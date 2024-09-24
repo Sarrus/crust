@@ -203,7 +203,7 @@ _Noreturn void crust_node_loop()
 
         if(nodeServerConnection->didConnect)
         {
-            for (int i = 1; i < pinMapLength; i++)
+            for(int i = 0; i < pinMapLength; i++)
             {
                 if (pinMap[i].lastOccupationRead != pinMap[i].lastOccupationSent)
                 {
