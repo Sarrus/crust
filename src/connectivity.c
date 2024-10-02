@@ -339,7 +339,8 @@ void crust_connectivity_execute(int timeout)
                 connectivity.connectionList[i]->closeFunction(connectivity.connectionList[i]);
             }
             connectivity.pollList[i].revents = 0; // Ignore any other events if we had a hangup
-            connectivity.pollList[i].events = 0; // Stop polling
+	    close(connectivity.pollList[i].fd); // Close the file descriptor
+	    connectivity.pollList[i].fd = -(connectivity.pollList[i].fd); // Stop polling
         }
 
         // Handle new outbound connections opening
