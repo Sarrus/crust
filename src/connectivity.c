@@ -402,6 +402,9 @@ void crust_connectivity_execute(int timeout)
                             connectivity.connectionList[i]->readBuffer,
                             newConnectivityReadBufferLength);
 
+		    // Make sure the first character of the new memory space is null
+		    connectivity.connectionList[i]->readBuffer[connectivityReadBufferLength] = '\0';
+
                     strncat(connectivity.connectionList[i]->readBuffer, localReadBuffer, bytesRead + 1);
 
                     // Tell the program that there is data to read
@@ -413,6 +416,7 @@ void crust_connectivity_execute(int timeout)
                     {
                         free(connectivity.connectionList[i]->readBuffer);
                         connectivity.connectionList[i]->readBuffer = NULL;
+                        connectivity.connectionList[i]->readTo = 0;
                     }
                     else
                     {
