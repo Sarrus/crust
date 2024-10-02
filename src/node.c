@@ -200,6 +200,7 @@ _Noreturn void crust_node_loop()
     {
         clock_gettime(CLOCK_MONOTONIC, &now);
         long connectivityExecuteTimeout = 0;
+	long long nowMiliseconds = (now.tv_sec * 1000) + (now.tv_nsec / 1000000);
 
         if(nodeServerConnection->didConnect)
         {
@@ -208,16 +209,10 @@ _Noreturn void crust_node_loop()
                 if (pinMap[i].lastOccupationRead != pinMap[i].lastOccupationSent)
                 {
                     // Calculate the time since the last read
-                    struct timespec difference;
-                    difference.tv_sec = now.tv_sec - pinMap[i].lastReadAt.tv_sec;
-                    difference.tv_nsec = now.tv_nsec - pinMap[i].lastReadAt.tv_nsec;
-                    if (difference.tv_nsec < 0)
-                    {
-                        difference.tv_nsec += (long) 1e9;
-                        difference.tv_sec--;
-                    }
+		    long long differenceMiliseconds = nowMiliseconds - 
+			    (pinMap[i].lastReadAt.tv_sec * 1000) - (pinMap[i].lastReadAt.tv_nsec / 1000000);
 
-                    if (difference.tv_sec || (difference.tv_nsec > (CRUST_NODE_SETTLE_TIME * 1000)))
+                    if (pinMap[i].lastOccupationRead || differenceMiliseconds >= CRUST_NODE_SETTLE_TIME)
                     {
                         if (pinMap[i].lastOccupationRead)
                         {
@@ -230,14 +225,10 @@ _Noreturn void crust_node_loop()
                         crust_connection_write(nodeServerConnection, messageBuffer);
                         pinMap[i].lastOccupationSent = pinMap[i].lastOccupationRead;
                     }
-                    else if (!difference.tv_sec)
+                    if (!connectivityExecuteTimeout || differenceMiliseconds < connectivityExecuteTimeout)
                     {
-                        long differenceInMsec = difference.tv_nsec / 1000;
-                        if (!connectivityExecuteTimeout || differenceInMsec < connectivityExecuteTimeout)
-                        {
-                            connectivityExecuteTimeout = differenceInMsec;
-                        }
-                    }
+                        connectivityExecuteTimeout = differenceMiliseconds;
+		    }
                 }
             }
         }
