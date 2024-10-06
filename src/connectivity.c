@@ -290,7 +290,15 @@ CRUST_CONNECTION * crust_connection_gpio_open(void (*readFunction)(CRUST_CONNECT
         crust_terminal_print("Failed to obtain file descriptor for a GPIO line");
         exit(EXIT_FAILURE);
     }
-    pollListEntry->events = POLLRDNORM;
+    
+    // Make the line non-blocking
+    if(fcntl(pollListEntry->fd, F_SETFD, fcntl(pollListEntry->fd, F_GETFD) | O_NONBLOCK) == -1)
+    {
+        crust_terminal_print("Unable to make the GPIO line non-blocking.");
+        exit(EXIT_FAILURE);
+    }
+    
+    pollListEntry->events = POLLRDNORM | POLLIN;
 
     return connection;
 }

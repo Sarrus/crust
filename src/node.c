@@ -199,7 +199,7 @@ _Noreturn void crust_node_loop()
     for(;;)
     {
         clock_gettime(CLOCK_MONOTONIC, &now);
-        long connectivityExecuteTimeout = 0;
+        long connectivityExecuteTimeout = -1;
 	long long nowMiliseconds = (now.tv_sec * 1000) + (now.tv_nsec / 1000000);
 
         if(nodeServerConnection->didConnect)
@@ -225,7 +225,7 @@ _Noreturn void crust_node_loop()
                         crust_connection_write(nodeServerConnection, messageBuffer);
                         pinMap[i].lastOccupationSent = pinMap[i].lastOccupationRead;
                     }
-                    if (!connectivityExecuteTimeout || differenceMiliseconds < connectivityExecuteTimeout)
+                    if (connectivityExecuteTimeout == -1 || differenceMiliseconds < connectivityExecuteTimeout)
                     {
                         connectivityExecuteTimeout = differenceMiliseconds;
 		    }
