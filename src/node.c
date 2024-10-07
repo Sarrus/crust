@@ -200,7 +200,7 @@ _Noreturn void crust_node_loop()
     {
         clock_gettime(CLOCK_MONOTONIC, &now);
         long connectivityExecuteTimeout = -1;
-	long long nowMiliseconds = (now.tv_sec * 1000) + (now.tv_nsec / 1000000);
+	    long long nowMilliseconds = (now.tv_sec * 1000) + (now.tv_nsec / 1000000);
 
         if(nodeServerConnection->didConnect)
         {
@@ -209,10 +209,10 @@ _Noreturn void crust_node_loop()
                 if (pinMap[i].lastOccupationRead != pinMap[i].lastOccupationSent)
                 {
                     // Calculate the time since the last read
-		    long long differenceMiliseconds = nowMiliseconds - 
-			    (pinMap[i].lastReadAt.tv_sec * 1000) - (pinMap[i].lastReadAt.tv_nsec / 1000000);
+		            long long differenceMilliseconds = nowMilliseconds -
+                            (pinMap[i].lastReadAt.tv_sec * 1000) - (pinMap[i].lastReadAt.tv_nsec / 1000000);
 
-                    if (pinMap[i].lastOccupationRead || differenceMiliseconds >= CRUST_NODE_SETTLE_TIME)
+                    if (pinMap[i].lastOccupationRead || differenceMilliseconds >= CRUST_NODE_SETTLE_TIME)
                     {
                         if (pinMap[i].lastOccupationRead)
                         {
@@ -225,10 +225,10 @@ _Noreturn void crust_node_loop()
                         crust_connection_write(nodeServerConnection, messageBuffer);
                         pinMap[i].lastOccupationSent = pinMap[i].lastOccupationRead;
                     }
-                    if (connectivityExecuteTimeout == -1 || differenceMiliseconds < connectivityExecuteTimeout)
+                    if (connectivityExecuteTimeout == -1 || differenceMilliseconds < connectivityExecuteTimeout)
                     {
-                        connectivityExecuteTimeout = differenceMiliseconds;
-		    }
+                        connectivityExecuteTimeout = differenceMilliseconds;
+		            }
                 }
             }
         }
