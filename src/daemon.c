@@ -493,15 +493,17 @@ void crust_daemon_handle_socket_connection(CRUST_CONNECTION * connection)
 void crust_daemon_handle_read(CRUST_CONNECTION * connection)
 {
     size_t readBufferLength = strlen(connection->readBuffer);
+    char * instructionStart = connection->readBuffer;
     for(size_t i = 0; i < readBufferLength; i++)
     {
         if(connection->readBuffer[i] == '\n')
         {
             connection->readBuffer[i] = '\0';
             CRUST_MIXED_OPERATION_INPUT operationInput;
-            CRUST_OPCODE opcode = crust_daemon_interpret_message(connection->readBuffer, &operationInput);
+            CRUST_OPCODE opcode = crust_daemon_interpret_message(instructionStart, &operationInput);
             crust_daemon_process_opcode(opcode, &operationInput, daemonSessionList[connection->customIdentifier]);
             connection->readTo = i;
+            instructionStart = &connection->readBuffer[i + 1];
         }
     }
 }
