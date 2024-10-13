@@ -115,6 +115,7 @@ void crust_block_init(CRUST_BLOCK ** block, CRUST_STATE * state)
         (*block)->links[i] = NULL;
     }
 
+    (*block)->blockId = 0;
     (*block)->trackCircuit = NULL;
     (*block)->blockName = NULL;
     (*block)->berth = false;
@@ -129,6 +130,7 @@ void crust_block_init(CRUST_BLOCK ** block, CRUST_STATE * state)
     (*block)->berthDirection = CRUST_DEFAULT_DIRECTION;
 
     (*block)->rearBerths = NULL;
+    (*block)->pathsToRearBerths = NULL;
     (*block)->numRearBerths = 0;
 }
 
@@ -421,7 +423,12 @@ void crust_remap_berths_block_walk(CRUST_BLOCK * block,
         }
         (*foundBlocks)[(*numBlocks) - 1] = block;
 
-        *pathsToFoundBlocks = realloc(*pathsToFoundBlocks, sizeof (CRUST_PATH *) * *numBlocks);
+        *pathsToFoundBlocks = realloc(*pathsToFoundBlocks, sizeof(CRUST_PATH *) * *numBlocks);
+        if(*pathsToFoundBlocks == NULL)
+        {
+            crust_terminal_print("Memory allocation error");
+            exit(EXIT_FAILURE);
+        }
         crust_path_init(&(*pathsToFoundBlocks)[(*numBlocks) - 1]);
         (*pathsToFoundBlocks)[(*numBlocks) - 1]->numLinkedBlocks = depth;
         (*pathsToFoundBlocks)[(*numBlocks) - 1]->linkedBlocks = malloc(sizeof(CRUST_BLOCK *) * depth);
