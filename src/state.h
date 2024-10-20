@@ -22,6 +22,7 @@
 #define CRUST_STATE_H
 
 #include <stdbool.h>
+#include "daemon.h"
 
 #define CRUST_BLOCK struct crustBlock
 #define CRUST_TRACK_CIRCUIT struct crustTrackCircuit
@@ -77,6 +78,7 @@ struct crustTrackCircuit {
     CRUST_BLOCK ** downEdgeBlocks;
     CRUST_IDENTIFIER numDownEdgeBlocks;
     bool occupied;
+    CRUST_SESSION * owningSession;
 };
 
 struct crustState {
@@ -102,7 +104,10 @@ void crust_block_init(CRUST_BLOCK ** block, CRUST_STATE * state);
 void crust_track_circuit_init(CRUST_TRACK_CIRCUIT ** trackCircuit, CRUST_STATE * state);
 int crust_block_insert(CRUST_BLOCK * block, CRUST_STATE * state);
 int crust_track_circuit_insert(CRUST_TRACK_CIRCUIT * trackCircuit, CRUST_STATE * state);
-bool crust_track_circuit_set_occupation(CRUST_TRACK_CIRCUIT * trackCircuit, bool occupied, CRUST_STATE * state);
+bool crust_track_circuit_set_occupation(CRUST_TRACK_CIRCUIT * trackCircuit,
+                                        bool occupied,
+                                        CRUST_STATE * state,
+                                        CRUST_SESSION * requestingSession);
 bool crust_enable_berth(CRUST_BLOCK *block, CRUST_DIRECTION direction, CRUST_STATE * state);
 bool crust_interpose(CRUST_BLOCK * block, const char * headcode);
 size_t crust_headcode_auto_advance(CRUST_TRACK_CIRCUIT * occupiedTrackCircuit, CRUST_BLOCK *** affectedBlocks, CRUST_STATE * state);

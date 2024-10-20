@@ -348,7 +348,11 @@ size_t crust_print_track_circuit(CRUST_TRACK_CIRCUIT * trackCircuit, char ** out
         crust_dynamic_print_buffer_cat(&dynamicBuffer, chunkBuffer);
     }
 
-    if(trackCircuit->occupied)
+    if(trackCircuit->owningSession == NULL)
+    {
+        crust_dynamic_print_buffer_cat(&dynamicBuffer, "UK\n");
+    }
+    else if(trackCircuit->occupied)
     {
         crust_dynamic_print_buffer_cat(&dynamicBuffer, "OC\n");
     }

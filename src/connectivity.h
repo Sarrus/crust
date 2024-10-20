@@ -24,6 +24,7 @@
 #include <stddef.h>
 #include <poll.h>
 #include <stdbool.h>
+#include <netinet/in.h>
 #ifdef GPIO
 #include <gpiod.h>
 #endif

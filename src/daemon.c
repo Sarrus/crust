@@ -60,14 +60,6 @@ struct crustBufferListEntry {
     bool listening; // Indicates that the user wants state change updates
 };
 
-struct crustSession {
-    CRUST_CONNECTION * connection;
-    bool listening;
-    bool closed;
-};
-
-#define CRUST_SESSION struct crustSession
-
 CRUST_SESSION ** daemonSessionList = NULL;
 size_t daemonSessionListLength = 0;
 
@@ -108,6 +100,7 @@ void crust_daemon_session_init(CRUST_SESSION * session)
     session->connection = NULL;
     session->listening = false;
     session->closed = false;
+    session->ownsCircuits = false;
 }
 
 void crust_daemon_session_list_extend()
@@ -395,7 +388,7 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
         case CLEAR_TRACK_CIRCUIT:
             crust_terminal_print_verbose("OPCODE: Clear Track Circuit");
             if(crust_track_circuit_get(operationInput->identifier, &identifiedTrackCircuit, state)
-               && crust_track_circuit_set_occupation(identifiedTrackCircuit, false, state))
+               && crust_track_circuit_set_occupation(identifiedTrackCircuit, false, state, session))
             {
                 crust_print_track_circuit(identifiedTrackCircuit, &writeBuffer);
                 crust_write_to_listeners(writeBuffer);
@@ -407,7 +400,7 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
         case OCCUPY_TRACK_CIRCUIT:
             crust_terminal_print_verbose("OPCODE: Occupy Track Circuit");
             if(crust_track_circuit_get(operationInput->identifier, &identifiedTrackCircuit, state)
-               && crust_track_circuit_set_occupation(identifiedTrackCircuit, true, state))
+               && crust_track_circuit_set_occupation(identifiedTrackCircuit, true, state, session))
             {
                 crust_print_track_circuit(identifiedTrackCircuit, &writeBuffer);
                 crust_write_to_listeners(writeBuffer);
@@ -510,9 +503,25 @@ void crust_daemon_handle_read(CRUST_CONNECTION * connection)
 
 void crust_daemon_handle_close(CRUST_CONNECTION * connection)
 {
+    char * writeBuffer;
+
     crust_terminal_print_verbose("Client connection closed.");
-    daemonSessionList[connection->customIdentifier]->closed = true;
-    daemonSessionList[connection->customIdentifier]->connection = NULL;
+    CRUST_SESSION * session = daemonSessionList[connection->customIdentifier];
+    session->closed = true;
+    session->connection = NULL;
+    if(session->ownsCircuits)
+    {
+        for(unsigned int i = 0; i < state->trackCircuitIndexPointer; i++)
+        {
+            if(state->trackCircuitIndex[i]->owningSession == session)
+            {
+                state->trackCircuitIndex[i]->owningSession = NULL;
+                crust_print_track_circuit(state->trackCircuitIndex[i], &writeBuffer);
+                crust_write_to_listeners(writeBuffer);
+                free(writeBuffer);
+            }
+        }
+    }
 }
 
 _Noreturn void crust_daemon_loop()

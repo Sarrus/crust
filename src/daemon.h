@@ -21,6 +21,17 @@
 #ifndef CRUST_DAEMON_H
 #define CRUST_DAEMON_H
 
+#include "connectivity.h"
+
+struct crustSession {
+    CRUST_CONNECTION * connection;
+    bool listening;
+    bool closed;
+    bool ownsCircuits;
+};
+
+#define CRUST_SESSION struct crustSession
+
 _Noreturn void crust_daemon_run();
 
 #endif //CRUST_DAEMON_H

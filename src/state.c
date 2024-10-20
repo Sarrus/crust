@@ -175,6 +175,7 @@ void crust_track_circuit_init(CRUST_TRACK_CIRCUIT ** trackCircuit, CRUST_STATE *
     (*trackCircuit)->numUpEdgeBlocks = 0;
     (*trackCircuit)->downEdgeBlocks = NULL;
     (*trackCircuit)->numDownEdgeBlocks = 0;
+    (*trackCircuit)->owningSession = NULL;
 }
 
 /*
@@ -375,8 +376,23 @@ bool crust_track_circuit_get(unsigned int trackCircuitId, CRUST_TRACK_CIRCUIT **
 }
 
 // Sets the occupation state of a track circuit. Returns true if the occupation has changed, false otherwise.
-bool crust_track_circuit_set_occupation(CRUST_TRACK_CIRCUIT * trackCircuit, bool occupied, CRUST_STATE * state)
+bool crust_track_circuit_set_occupation(CRUST_TRACK_CIRCUIT * trackCircuit,
+                                        bool occupied,
+                                        CRUST_STATE * state,
+                                        CRUST_SESSION * requestingSession)
 {
+    if(trackCircuit->owningSession == NULL)
+    {
+        trackCircuit->owningSession = requestingSession;
+        requestingSession->ownsCircuits = true;
+        trackCircuit->occupied = occupied;
+        return true;
+    }
+    else if(trackCircuit->owningSession != requestingSession)
+    {
+        return false;
+    }
+
     if(trackCircuit->occupied == occupied)
     {
         return false;

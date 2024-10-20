@@ -63,6 +63,7 @@ struct crustLineMapEntry {
     unsigned long yPos;
     long trackCircuitNumber;
     bool occupied;
+    bool trackCircuitStateKnown;
     long berthNumber;
     long berthCharacterPos;
     char berthCharacter;
@@ -81,6 +82,7 @@ unsigned int lineMapLength = 0;
 #define CRUST_COLOUR_PAIR_OCCUPIED 3
 #define CRUST_COLOUR_PAIR_HEADCODE 4
 #define CRUST_COLOUR_PAIR_BERTH_NUMBER 5
+#define CRUST_COLOUR_PAIR_UNKNOWN 6
 
 #define CRUST_REGEX_CAPTURE_HEADCODE_FROM_BLOCK "^.*\\/.(.*):.*"
 regex_t regexCaptureHeadcodeFromBlock;
@@ -139,6 +141,7 @@ void crust_window_load_layout()
             lineMap[lineMapLength -1].berthCharacterPos = -1;
             lineMap[lineMapLength -1].berthCharacter = '_';
             lineMap[lineMapLength -1].showBerth = false;
+            lineMap[lineMapLength -1].trackCircuitStateKnown = false;
 
             lineNextSegment = line;
             for(int i = 0; i < 6; i++)
@@ -244,6 +247,19 @@ void crust_window_set_occupation(CRUST_IDENTIFIER trackCircuitID, bool occupatio
         if(lineMap[i].trackCircuitNumber == trackCircuitID)
         {
             lineMap[i].occupied = occupation;
+            lineMap[i].trackCircuitStateKnown = true;
+        }
+    }
+}
+
+void crust_window_loose_circuit(CRUST_IDENTIFIER trackCircuitID)
+{
+    for(int i = 0; i < lineMapLength; i++)
+    {
+        if(lineMap[i].trackCircuitNumber == trackCircuitID)
+        {
+            lineMap[i].occupied = true;
+            lineMap[i].trackCircuitStateKnown = false;
         }
     }
 }
@@ -342,6 +358,10 @@ CRUST_OPCODE crust_window_interpret_message(char * message, CRUST_IDENTIFIER * r
                     {
                         return CLEAR_TRACK_CIRCUIT;
                     }
+                    else if(message[length - 2] == 'U' && message[length - 1] == 'K')
+                    {
+                        return LOOSE_TRACK_CIRCUIT;
+                    }
                     else
                     {
                         return NO_OPERATION;
@@ -420,6 +440,23 @@ void crust_window_refresh_screen()
             attron(COLOR_PAIR(CRUST_COLOUR_PAIR_DEFAULT));
             addch(lineMap[i].character);
             attroff(COLOR_PAIR(CRUST_COLOUR_PAIR_DEFAULT));
+        }
+        else if(!(lineMap[i].trackCircuitStateKnown))
+        {
+            if(flasher)
+            {
+                attron(COLOR_PAIR(CRUST_COLOUR_PAIR_DEFAULT));
+                addch(lineMap[i].character);
+                attroff(COLOR_PAIR(CRUST_COLOUR_PAIR_DEFAULT));
+            }
+            else
+            {
+                attron(COLOR_PAIR(CRUST_COLOUR_PAIR_UNKNOWN));
+                attron(A_BOLD);
+                addch('?');
+                attroff(A_BOLD);
+                attroff(COLOR_PAIR(CRUST_COLOUR_PAIR_UNKNOWN));
+            }
         }
         else if(lineMap[i].occupied == true)
         {
@@ -548,6 +585,7 @@ void crust_window_enter_mode(CRUST_WINDOW_MODE targetMode)
             init_pair(CRUST_COLOUR_PAIR_OCCUPIED, COLOR_RED, COLOR_BLACK);
             init_pair(CRUST_COLOUR_PAIR_HEADCODE, COLOR_CYAN, COLOR_BLACK);
             init_pair(CRUST_COLOUR_PAIR_BERTH_NUMBER, COLOR_YELLOW, COLOR_BLACK);
+            init_pair(CRUST_COLOUR_PAIR_UNKNOWN, COLOR_YELLOW, COLOR_BLACK);
 
             addstr("   __________  __  _____________\n"
                    "  / ____/ __ \\/ / / / ___/_  __/\n"
@@ -697,6 +735,10 @@ void crust_window_handle_update(CRUST_CONNECTION * connection)
 
                 case CLEAR_TRACK_CIRCUIT:
                     crust_window_set_occupation(remoteID, false);
+                    break;
+
+                case LOOSE_TRACK_CIRCUIT:
+                    crust_window_loose_circuit(remoteID);
                     break;
 
                 case UPDATE_BLOCK:
