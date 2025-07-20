@@ -1,0 +1,12 @@
+[Unit]
+Description=CRUST Window
+
+[Service]
+WorkingDirectory=%h/crust/tools
+ExecStart=foot -Ff monospace:size=18 crust -w layout.txt
+Type=simple
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
