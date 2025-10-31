@@ -60,7 +60,7 @@ extern in_port_t crustOptionPort;
 extern in_addr_t crustOptionIPAddress;
 extern bool crustOptionWindowEnterLog;
 extern char crustOptionWindowConfigFilePath[PATH_MAX];
-extern char crustConfigFilePath[PATH_MAX];
+extern char crustOptionDaemonConfigFilePath[PATH_MAX];
 
 #ifdef GPIO
 extern char crustOptionGPIOPath[PATH_MAX];

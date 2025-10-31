@@ -60,7 +60,7 @@ int main(int argc, char ** argv) {
 
     opterr = true;
     int option;
-    while((option = getopt(argc, argv, "a:dg:hilm:n:p:r:u:vw:")) != -1)
+    while((option = getopt(argc, argv, "a:c:dg:hilm:n:p:r:u:vw:")) != -1)
     {
         switch(option)
         {
@@ -71,6 +71,11 @@ int main(int argc, char ** argv) {
                     exit(EXIT_FAILURE);
                 }
                 crustOptionIPAddress = prospectiveIPAddress.s_addr;
+                break;
+
+            case 'c':
+                strncpy(crustOptionDaemonConfigFilePath, optarg, PATH_MAX);
+                crustOptionDaemonConfigFilePath[PATH_MAX - 1] = '\0';
                 break;
 
             case 'd':
@@ -92,6 +97,8 @@ int main(int argc, char ** argv) {
                 crust_terminal_print("CRUST: Consolidated Realtime Updates on Status of Trains");
                 crust_terminal_print("Usage: crust [options]");
                 crust_terminal_print("  -a  IP address of the CRUST server (defaults to 127.0.0.1)");
+                crust_terminal_print("  -c  (Daemon mode only) execute the commands in the named file before accepting "
+                                     "connections.");
                 crust_terminal_print("  -d  Run in daemon mode.");
                 crust_terminal_print("  -g  Switch to this group after completing setup (if run as root) and set this "
                                      "group on the CRUST run directory. "

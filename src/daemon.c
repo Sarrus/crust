@@ -357,6 +357,7 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
 
             // Resend the entire state to the user
         case RESEND_STATE:
+            if(session == NULL) break;
             crust_terminal_print_verbose("OPCODE: Resend State");
             crust_print_state(state, &writeBuffer);
             crust_connection_write(session->connection, writeBuffer);
@@ -377,6 +378,7 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
 #endif
             // Send the state then send updates as it changes.
         case START_LISTENING:
+            if(session == NULL) break;
             crust_terminal_print_verbose("OPCODE: Start Listening");
             crust_print_state(state, &writeBuffer);
             crust_connection_write(session->connection, writeBuffer);
@@ -386,6 +388,7 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
             break;
 
         case CLEAR_TRACK_CIRCUIT:
+            if(session == NULL) break;
             crust_terminal_print_verbose("OPCODE: Clear Track Circuit");
             if(crust_track_circuit_get(operationInput->identifier, &identifiedTrackCircuit, state)
                && crust_track_circuit_set_occupation(identifiedTrackCircuit, false, state, session))
@@ -398,6 +401,7 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
             break;
 
         case OCCUPY_TRACK_CIRCUIT:
+            if(session == NULL) break;
             crust_terminal_print_verbose("OPCODE: Occupy Track Circuit");
             if(crust_track_circuit_get(operationInput->identifier, &identifiedTrackCircuit, state)
                && crust_track_circuit_set_occupation(identifiedTrackCircuit, true, state, session))
@@ -475,6 +479,38 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
     }
 }
 
+void crust_daemon_read_config()
+{
+    char line[CRUST_MAX_MESSAGE_LENGTH];
+
+    FILE * configFile = fopen(crustOptionDaemonConfigFilePath, "r");
+    if(configFile == NULL)
+    {
+        crust_terminal_print("Failed to open config file.");
+        exit(EXIT_FAILURE);
+    }
+    while(fgets(line, CRUST_MAX_MESSAGE_LENGTH, configFile) != NULL)
+    {
+        for(int i = 0; i < CRUST_MAX_MESSAGE_LENGTH; i++)
+        {
+            if(line[i] == '\r' || line[i] == '\n')
+            {
+                line[i] = '\0';
+                break;
+            }
+        }
+
+        CRUST_MIXED_OPERATION_INPUT operationInput;
+        CRUST_OPCODE opcode = crust_daemon_interpret_message(line, &operationInput);
+        if(opcode == NO_OPERATION)
+        {
+            crust_terminal_print("Invalid initial config.");
+            exit(EXIT_FAILURE);
+        }
+        crust_daemon_process_opcode(opcode, &operationInput, NULL);
+    }
+}
+
 void crust_daemon_handle_socket_connection(CRUST_CONNECTION * connection)
 {
     crust_terminal_print_verbose("New client connection accepted.");
@@ -549,14 +585,6 @@ _Noreturn void crust_daemon_run()
         }
     }
 
-    crust_terminal_print_verbose("Creating CRUST socket...");
-
-    daemonSocket = crust_connection_socket_open(crust_daemon_handle_read,
-                                                crust_daemon_handle_socket_connection,
-                                                crust_daemon_handle_close,
-                                                crustOptionIPAddress,
-                                                crustOptionPort);
-
     if(crustOptionSetUser)
     {
         crust_terminal_print_verbose("Setting process UID...");
@@ -575,6 +603,19 @@ _Noreturn void crust_daemon_run()
 
 
     crust_state_init(&state);
+
+    if(crustOptionDaemonConfigFilePath[0] != '\0')
+    {
+        crust_terminal_print_verbose("Reading config...");
+        crust_daemon_read_config();
+    }
+
+    crust_terminal_print_verbose("Creating CRUST socket...");
+    daemonSocket = crust_connection_socket_open(crust_daemon_handle_read,
+                                                crust_daemon_handle_socket_connection,
+                                                crust_daemon_handle_close,
+                                                crustOptionIPAddress,
+                                                crustOptionPort);
 
 #ifdef SYSTEMD
     sd_notify(0, "READY=1\n"

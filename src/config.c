@@ -33,7 +33,7 @@ bool crustOptionSetGroup = false;
 gid_t crustOptionTargetGroup;
 in_port_t crustOptionPort = CRUST_DEFAULT_PORT;
 in_addr_t crustOptionIPAddress = CRUST_DEFAULT_IP_ADDRESS;
-char crustConfigFilePath[PATH_MAX];
+char crustOptionDaemonConfigFilePath[PATH_MAX] = "";
 
 #ifdef NCURSES
 bool crustOptionWindowEnterLog = false;
