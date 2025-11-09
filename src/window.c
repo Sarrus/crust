@@ -1,6 +1,6 @@
 /******************************************************************************
  * Consolidated, Realtime Updates on Status of Trains (CRUST)
- * Copyright (C) 2022-2024 Michael R. Bell <michael@black-dragon.io>
+ * Copyright (C) 2022-2025 Michael R. Bell <michael@black-dragon.io>
  *
  * This file is part of CRUST. For more information, visit
  * <https://github.com/Sarrus/crust>
