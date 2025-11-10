@@ -41,7 +41,10 @@ enum crustWindowMode {
     CONNECTING,
     DISCONNECTED,
     MANUAL_INTERPOSE,
-    MANUAL_CLEAR
+    MANUAL_CLEAR,
+#ifdef TESTING
+    CIRCUIT_TEST,
+#endif
 };
 
 #define CRUST_WINDOW_MODE enum crustWindowMode
@@ -54,6 +57,10 @@ int reconnectWaitTimer = -1;
 
 int keyboardInputPointer = 0;
 static char keyboardInputBuffer[10] = "________\0\0";
+
+#ifdef TESTING
+long selectedCircuit = 0;
+#endif
 
 CRUST_CONNECTION * windowServerConnection = NULL;
 
@@ -74,6 +81,7 @@ struct crustLineMapEntry {
 #define CRUST_LINE_MAP_ENTRY struct crustLineMapEntry
 CRUST_LINE_MAP_ENTRY * lineMap = NULL;
 unsigned int lineMapLength = 0;
+unsigned int circuitCount = 0;
 
 #define CRUST_COLOUR_GREY 8
 
@@ -201,6 +209,10 @@ void crust_window_load_layout()
                                 || intConvEndPos == line)
                             {
                                 lineMap[lineMapLength - 1].trackCircuitNumber = -1;
+                            }
+                            else if(circuitCount <= lineMap[lineMapLength - 1].trackCircuitNumber)
+                            {
+                                circuitCount = lineMap[lineMapLength - 1].trackCircuitNumber + 1;
                             }
                             break;
 
@@ -419,7 +431,9 @@ void crust_window_refresh_screen()
     {
         move(lineMap[i].yPos, lineMap[i].xPos);
 
-        if(currentWindowMode != HOME && flasher && lineMap[i].berthNumber > -1)
+        if((currentWindowMode == MANUAL_INTERPOSE || currentWindowMode == MANUAL_CLEAR)
+            && flasher
+            && lineMap[i].berthNumber > -1)
         {
             attron(COLOR_PAIR(CRUST_COLOUR_PAIR_BERTH_NUMBER));
             attron(A_BOLD);
@@ -458,6 +472,16 @@ void crust_window_refresh_screen()
                 attroff(COLOR_PAIR(CRUST_COLOUR_PAIR_UNKNOWN));
             }
         }
+#ifdef TESTING
+        else if(currentWindowMode == CIRCUIT_TEST && flasher && lineMap[i].trackCircuitNumber == selectedCircuit)
+        {
+            attron(COLOR_PAIR(CRUST_COLOUR_PAIR_HEADCODE));
+            attron(A_BOLD);
+            addch(lineMap[i].character);
+            attroff(A_BOLD);
+            attroff(COLOR_PAIR(CRUST_COLOUR_PAIR_HEADCODE));
+        }
+#endif
         else if(lineMap[i].occupied == true)
         {
             attron(COLOR_PAIR(CRUST_COLOUR_PAIR_OCCUPIED));
@@ -482,6 +506,9 @@ void crust_window_refresh_screen()
     {
         case HOME:
             addstr("Q: Quit, I: Manual Interpose, C: Manual Clear");
+#ifdef TESTING
+            addstr(", T: Track Circuit Test");
+#endif
             move(LINES - 1, COLS - 1);
             break;
 
@@ -546,9 +573,13 @@ void crust_window_refresh_screen()
             addstr("Server disconnected, attempting to reconnect...");
             refresh();
             break;
+
+#ifdef TESTING
+        case CIRCUIT_TEST:
+            addstr("CIRCUIT TEST MODE: Q: Quit, <- / ->: Select Circuit, O: Occupy, C: Clear");
+            break;
+#endif
     }
-
-
 
     refresh();
 }
@@ -563,7 +594,7 @@ void crust_window_enter_mode(CRUST_WINDOW_MODE targetMode)
 
         case WELCOME:
             initscr();
-            if(cbreak() != OK || noecho() != OK || nonl() != OK || nodelay(stdscr, TRUE) != OK)
+            if(cbreak() != OK || noecho() != OK || nonl() != OK || nodelay(stdscr, TRUE) != OK || keypad(stdscr, TRUE != OK))
             {
                 crust_terminal_print("Failed to initialize screen.");
                 exit(EXIT_FAILURE);
@@ -616,6 +647,18 @@ void crust_window_enter_mode(CRUST_WINDOW_MODE targetMode)
         case MANUAL_CLEAR:
             currentWindowMode = targetMode;
             break;
+
+#ifdef TESTING
+        case CIRCUIT_TEST:
+            char writeBuffer[CRUST_MAX_MESSAGE_LENGTH];
+            for(unsigned int i = 0; i < circuitCount; i++)
+            {
+                snprintf(writeBuffer, CRUST_MAX_MESSAGE_LENGTH, "CC%i\n", i);
+                crust_connection_write(windowServerConnection, writeBuffer);
+            }
+            currentWindowMode = CIRCUIT_TEST;
+            break;
+#endif
     }
 }
 
@@ -638,7 +681,7 @@ void crust_window_print(char * message, CRUST_WINDOW_MODE mode)
 
 void crust_window_handle_keyboard()
 {
-    char inputCharacter = getch();
+    int inputCharacter = getch();
 
     if(currentWindowMode == MANUAL_INTERPOSE || currentWindowMode == MANUAL_CLEAR)
     {
@@ -707,12 +750,59 @@ void crust_window_handle_keyboard()
                 crust_window_enter_mode(MANUAL_INTERPOSE);
                 break;
 
+#ifdef TESTING
+            case 't':
+            case 'T':
+                crust_window_enter_mode(CIRCUIT_TEST);
+                break;
+#endif
+
             case '\e':
                 crust_window_enter_mode(HOME);
                 break;
         }
     }
-    // Handle data from the keyboard
+#ifdef TESTING
+    else if(currentWindowMode == CIRCUIT_TEST)
+    {
+        char writeBuffer[CRUST_MAX_MESSAGE_LENGTH];
+        switch(inputCharacter)
+        {
+            case 'o':
+            case 'O':
+                snprintf(writeBuffer, CRUST_MAX_MESSAGE_LENGTH, "OC%li\n", selectedCircuit);
+                crust_connection_write(windowServerConnection, writeBuffer);
+                break;
+
+            case 'c':
+            case 'C':
+                snprintf(writeBuffer, CRUST_MAX_MESSAGE_LENGTH, "CC%li\n", selectedCircuit);
+                crust_connection_write(windowServerConnection, writeBuffer);
+                break;
+
+            case KEY_RIGHT:
+                selectedCircuit++;
+                selectedCircuit %= circuitCount;
+                break;
+
+            case KEY_LEFT:
+                selectedCircuit--;
+                if(selectedCircuit < 0)
+                {
+                    selectedCircuit = circuitCount - 1;
+                }
+                break;
+
+            case 'q':
+            case 'Q':
+                crust_window_stop();
+                break;
+
+            default:
+                break;
+        }
+    }
+#endif
 
 }
 
