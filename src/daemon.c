@@ -37,9 +37,6 @@
 #ifdef SYSTEMD
 #include <systemd/sd-daemon.h>
 #endif
-#ifdef TESTING
-#include "tools/lipsum.h"
-#endif
 
 #define CRUST_WRITE struct crustWrite
 #define CRUST_BUFFER_LIST_ENTRY struct crustBufferListEntry
@@ -237,11 +234,6 @@ CRUST_OPCODE crust_daemon_interpret_message(char * message, CRUST_MIXED_OPERATIO
                 case 'S':
                     return RESEND_STATE;
 
-#ifdef TESTING
-                    case 'L':
-                    return RESEND_LIPSUM;
-#endif
-
                 default:
                     return NO_OPERATION;
             }
@@ -365,17 +357,6 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
             writeBuffer = NULL;
             break;
 
-#ifdef TESTING
-        case RESEND_LIPSUM:
-            crust_terminal_print_verbose("OPCODE: Resend Lipsum");
-            write = malloc(sizeof(CRUST_WRITE));
-            write->bufferLength = strlen(lipsum);
-            write->writeBuffer = malloc(write->bufferLength);
-            strcpy(write->writeBuffer, lipsum);
-            write->targets = 0;
-            crust_write_queue_insert(pollList, bufferList, listPosition, write);
-            break;
-#endif
             // Send the state then send updates as it changes.
         case START_LISTENING:
             if(session == NULL) break;
