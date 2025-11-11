@@ -575,6 +575,12 @@ size_t crust_headcode_auto_advance(CRUST_TRACK_CIRCUIT * occupiedTrackCircuit, C
                     // Find the first occupied circuit in the path that isn't the newly occupied circuit
                     for(int k = 0; k < occupiedTrackCircuit->blocks[i]->pathsToRearBerths[j]->numLinkedBlocks; k++)
                     {
+                        // Skip blocks that are not in a circuit
+                        if(occupiedTrackCircuit->blocks[i]->pathsToRearBerths[j]->linkedBlocks[k]->trackCircuit == NULL)
+                        {
+                            continue;
+                        }
+
                         if(occupiedTrackCircuit->blocks[i]->pathsToRearBerths[j]->linkedBlocks[k]->trackCircuit->occupied
                         && occupiedTrackCircuit->blocks[i]->pathsToRearBerths[j]->linkedBlocks[k]->trackCircuit != occupiedTrackCircuit)
                         {
