@@ -91,6 +91,8 @@ unsigned int circuitCount = 0;
 #define CRUST_COLOUR_PAIR_HEADCODE 4
 #define CRUST_COLOUR_PAIR_BERTH_NUMBER 5
 #define CRUST_COLOUR_PAIR_UNKNOWN 6
+#define CRUST_COLOUR_PAIR_SELECTED_CLEAR 7
+#define CRUST_COLOUR_PAIR_SELECTED_OCCUPIED 8
 
 #define CRUST_REGEX_CAPTURE_HEADCODE_FROM_BLOCK "^.*\\/.(.*):.*"
 regex_t regexCaptureHeadcodeFromBlock;
@@ -473,13 +475,24 @@ void crust_window_refresh_screen()
             }
         }
 #ifdef TESTING
-        else if(currentWindowMode == CIRCUIT_TEST && flasher && lineMap[i].trackCircuitNumber == selectedCircuit)
+        else if(currentWindowMode == CIRCUIT_TEST
+            && lineMap[i].trackCircuitNumber == selectedCircuit
+            && lineMap[i].occupied == true)
         {
-            attron(COLOR_PAIR(CRUST_COLOUR_PAIR_HEADCODE));
+            attron(COLOR_PAIR(CRUST_COLOUR_PAIR_SELECTED_OCCUPIED));
             attron(A_BOLD);
             addch(lineMap[i].character);
             attroff(A_BOLD);
-            attroff(COLOR_PAIR(CRUST_COLOUR_PAIR_HEADCODE));
+            attroff(COLOR_PAIR(CRUST_COLOUR_PAIR_SELECTED_OCCUPIED));
+        }
+        else if(currentWindowMode == CIRCUIT_TEST
+                && lineMap[i].trackCircuitNumber == selectedCircuit)
+        {
+            attron(COLOR_PAIR(CRUST_COLOUR_PAIR_SELECTED_CLEAR));
+            attron(A_BOLD);
+            addch(lineMap[i].character);
+            attroff(A_BOLD);
+            attroff(COLOR_PAIR(CRUST_COLOUR_PAIR_SELECTED_CLEAR));
         }
 #endif
         else if(lineMap[i].occupied == true)
@@ -617,6 +630,8 @@ void crust_window_enter_mode(CRUST_WINDOW_MODE targetMode)
             init_pair(CRUST_COLOUR_PAIR_HEADCODE, COLOR_CYAN, COLOR_BLACK);
             init_pair(CRUST_COLOUR_PAIR_BERTH_NUMBER, COLOR_YELLOW, COLOR_BLACK);
             init_pair(CRUST_COLOUR_PAIR_UNKNOWN, COLOR_YELLOW, COLOR_BLACK);
+            init_pair(CRUST_COLOUR_PAIR_SELECTED_CLEAR, COLOR_WHITE, COLOR_CYAN);
+            init_pair(CRUST_COLOUR_PAIR_SELECTED_OCCUPIED, COLOR_RED, COLOR_CYAN);
 
             addstr("   __________  __  _____________\n"
                    "  / ____/ __ \\/ / / / ___/_  __/\n"
