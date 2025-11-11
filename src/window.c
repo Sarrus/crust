@@ -42,6 +42,7 @@ enum crustWindowMode {
     DISCONNECTED,
     MANUAL_INTERPOSE,
     MANUAL_CLEAR,
+    MANUAL_STEP,
 #ifdef TESTING
     CIRCUIT_TEST,
 #endif
@@ -393,7 +394,8 @@ CRUST_OPCODE crust_window_interpret_message(char * message, CRUST_IDENTIFIER * r
 void crust_window_process_input(char * receivedInputBuffer)
 {
     char headcode[CRUST_HEADCODE_LENGTH + 1];
-    unsigned long berth;
+    unsigned long sourceBerth;
+    unsigned long destBerth;
     char writeBuffer[CRUST_MAX_MESSAGE_LENGTH];
 
     if(windowServerConnection == NULL)
@@ -410,15 +412,23 @@ void crust_window_process_input(char * receivedInputBuffer)
             }
             headcode[CRUST_HEADCODE_LENGTH] = '\0';
             receivedInputBuffer[4] = '\0';
-            berth = strtoul(receivedInputBuffer, NULL, 10);
-            snprintf(writeBuffer, CRUST_MAX_MESSAGE_LENGTH, "IP%li/%s\n", berth, headcode);
+            destBerth = strtoul(receivedInputBuffer, NULL, 10);
+            snprintf(writeBuffer, CRUST_MAX_MESSAGE_LENGTH, "IP%li/%s\n", destBerth, headcode);
             crust_connection_write(windowServerConnection, writeBuffer);
             break;
 
         case MANUAL_CLEAR:
             receivedInputBuffer[4] = '\0';
-            berth = strtoul(receivedInputBuffer, NULL, 10);
-            snprintf(writeBuffer, CRUST_MAX_MESSAGE_LENGTH, "IP%li/____\n", berth);
+            destBerth = strtoul(receivedInputBuffer, NULL, 10);
+            snprintf(writeBuffer, CRUST_MAX_MESSAGE_LENGTH, "IP%li/____\n", destBerth);
+            crust_connection_write(windowServerConnection, writeBuffer);
+            break;
+
+        case MANUAL_STEP:
+            destBerth = strtoul(&receivedInputBuffer[4], NULL, 10);
+            receivedInputBuffer[4] = '\0';
+            sourceBerth = strtoul(receivedInputBuffer, NULL, 10);
+            snprintf(writeBuffer, CRUST_MAX_MESSAGE_LENGTH, "MS%li/%li\n", sourceBerth, destBerth);
             crust_connection_write(windowServerConnection, writeBuffer);
             break;
     }
@@ -433,7 +443,9 @@ void crust_window_refresh_screen()
     {
         move(lineMap[i].yPos, lineMap[i].xPos);
 
-        if((currentWindowMode == MANUAL_INTERPOSE || currentWindowMode == MANUAL_CLEAR)
+        if((currentWindowMode == MANUAL_INTERPOSE
+                || currentWindowMode == MANUAL_CLEAR
+                || currentWindowMode == MANUAL_STEP)
             && flasher
             && lineMap[i].berthNumber > -1)
         {
@@ -518,7 +530,7 @@ void crust_window_refresh_screen()
     switch(currentWindowMode)
     {
         case HOME:
-            addstr("Q: Quit, I: Manual Interpose, C: Manual Clear");
+            addstr("Q: Quit, I: Manual Interpose, C: Manual Clear, S: Manual Step");
 #ifdef TESTING
             addstr(", T: Track Circuit Test");
 #endif
@@ -571,6 +583,38 @@ void crust_window_refresh_screen()
             attroff(COLOR_PAIR(CRUST_COLOUR_PAIR_BERTH_NUMBER));
             addstr(" (enter). Esc to cancel.");
             move(LINES - 1, 25 + keyboardInputPointer);
+            break;
+
+        case MANUAL_STEP:
+            addstr("MANUAL STEP type ");
+            attron(COLOR_PAIR(CRUST_COLOUR_PAIR_BERTH_NUMBER));
+            attron(A_BOLD);
+            addstr("SOURCE BERTH: ");
+            addch(keyboardInputBuffer[0]);
+            addch(keyboardInputBuffer[1]);
+            addch(keyboardInputBuffer[2]);
+            addch(keyboardInputBuffer[3]);
+            attroff(A_BOLD);
+            attroff(COLOR_PAIR(CRUST_COLOUR_PAIR_BERTH_NUMBER));
+            addstr(" (enter) then ");
+            attron(COLOR_PAIR(CRUST_COLOUR_PAIR_BERTH_NUMBER));
+            attron(A_BOLD);
+            addstr("DESTINATION BERTH: ");
+            addch(keyboardInputBuffer[4]);
+            addch(keyboardInputBuffer[5]);
+            addch(keyboardInputBuffer[6]);
+            addch(keyboardInputBuffer[7]);
+            attroff(A_BOLD);
+            attroff(COLOR_PAIR(CRUST_COLOUR_PAIR_BERTH_NUMBER));
+            addstr(" (enter). Esc to cancel.");
+            if(keyboardInputPointer < 4)
+            {
+                move(LINES - 1, 31 + keyboardInputPointer);
+            }
+            else
+            {
+                move(LINES - 1, 64 + keyboardInputPointer);
+            }
             break;
 
         case CONNECTING:
@@ -660,6 +704,7 @@ void crust_window_enter_mode(CRUST_WINDOW_MODE targetMode)
         case HOME:
         case MANUAL_INTERPOSE:
         case MANUAL_CLEAR:
+        case MANUAL_STEP:
             currentWindowMode = targetMode;
             break;
 
@@ -698,7 +743,7 @@ void crust_window_handle_keyboard()
 {
     int inputCharacter = getch();
 
-    if(currentWindowMode == MANUAL_INTERPOSE || currentWindowMode == MANUAL_CLEAR)
+    if(currentWindowMode == MANUAL_INTERPOSE || currentWindowMode == MANUAL_CLEAR || currentWindowMode == MANUAL_STEP)
     {
         if(inputCharacter == '\e')
         {
@@ -725,13 +770,13 @@ void crust_window_handle_keyboard()
                 crust_window_enter_mode(HOME);
             }
         }
-        else if((inputCharacter >= 'A' && inputCharacter <= 'Z' && keyboardInputPointer > 3)
+        else if((inputCharacter >= 'A' && inputCharacter <= 'Z' && keyboardInputPointer > 3 && currentWindowMode != MANUAL_STEP)
             || (inputCharacter >= '0' && inputCharacter <= '9'))
         {
             keyboardInputBuffer[keyboardInputPointer] = inputCharacter;
             keyboardInputPointer++;
         }
-        else if(inputCharacter >= 'a' && inputCharacter <= 'z' && keyboardInputPointer > 3)
+        else if(inputCharacter >= 'a' && inputCharacter <= 'z' && keyboardInputPointer > 3 && currentWindowMode != MANUAL_STEP)
         {
             keyboardInputBuffer[keyboardInputPointer] = inputCharacter - 32;
             keyboardInputPointer++;
@@ -763,6 +808,11 @@ void crust_window_handle_keyboard()
             case 'i':
             case 'I':
                 crust_window_enter_mode(MANUAL_INTERPOSE);
+                break;
+
+            case 's':
+            case 'S':
+                crust_window_enter_mode(MANUAL_STEP);
                 break;
 
 #ifdef TESTING
