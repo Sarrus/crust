@@ -139,6 +139,20 @@ CRUST_OPCODE crust_daemon_interpret_message(char * message, CRUST_MIXED_OPERATIO
 
     switch(message[0])
     {
+        case 'B':
+            switch(message[1])
+            {
+                case 'S':
+                    operationInput->manualStepInstruction = malloc(sizeof(CRUST_BERTH_STEP_INSTRUCTION));
+                    if(crust_interpret_berth_step_instruction(&message[2], operationInput->manualStepInstruction))
+                    {
+                        crust_terminal_print_verbose("Invalid manual step instruction");
+                        free(operationInput->manualStepInstruction);
+                        return NO_OPERATION;
+                    }
+                    return BERTH_STEP;
+            }
+
         case 'C':
             switch(message[1])
             {
@@ -257,7 +271,8 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
 {
     CRUST_WRITE * write;
     CRUST_TRACK_CIRCUIT * identifiedTrackCircuit;
-    CRUST_BLOCK * identifiedBlock;
+    CRUST_BLOCK * sourceBlock;
+    CRUST_BLOCK * targetBlock;
     CRUST_BLOCK ** affectedBlocks = NULL;
     size_t affectedBlockCount = 0;
     char * writeBuffer;
@@ -407,10 +422,10 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
 
         case ENABLE_BERTH_UP:
             crust_terminal_print_verbose("OPCODE: Enable Berth UP");
-            if(crust_block_get(operationInput->identifier, &identifiedBlock, state)
-                && crust_enable_berth(identifiedBlock, UP, state))
+            if(crust_block_get(operationInput->identifier, &targetBlock, state)
+                && crust_enable_berth(targetBlock, UP, state))
             {
-                crust_print_block(identifiedBlock, &writeBuffer);
+                crust_print_block(targetBlock, &writeBuffer);
                 crust_write_to_listeners(writeBuffer);
                 free(writeBuffer);
                 writeBuffer = NULL;
@@ -419,10 +434,10 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
 
         case ENABLE_BERTH_DOWN:
             crust_terminal_print_verbose("OPCODE: Enable Berth DOWN");
-            if(crust_block_get(operationInput->identifier, &identifiedBlock, state)
-               && crust_enable_berth(identifiedBlock, DOWN, state))
+            if(crust_block_get(operationInput->identifier, &targetBlock, state)
+               && crust_enable_berth(targetBlock, DOWN, state))
             {
-                crust_print_block(identifiedBlock, &writeBuffer);
+                crust_print_block(targetBlock, &writeBuffer);
                 crust_write_to_listeners(writeBuffer);
                 free(writeBuffer);
                 writeBuffer = NULL;
@@ -431,18 +446,44 @@ void crust_daemon_process_opcode(CRUST_OPCODE opcode, CRUST_MIXED_OPERATION_INPU
 
         case INTERPOSE:
             crust_terminal_print_verbose("OPCODE: Interpose");
-            if(!crust_block_get(operationInput->interposeInstruction->blockID, &identifiedBlock, state))
+            if(!crust_block_get(operationInput->interposeInstruction->blockID, &targetBlock, state))
             {
                 crust_terminal_print_verbose("Invalid block");
                 break;
             }
-            if(!crust_interpose(identifiedBlock, operationInput->interposeInstruction->headcode))
+            if(!crust_interpose(targetBlock, operationInput->interposeInstruction->headcode))
             {
                 crust_terminal_print_verbose("Block is not a berth");
                 break;
             }
 
-            crust_print_block(identifiedBlock, &writeBuffer);
+            crust_print_block(targetBlock, &writeBuffer);
+            crust_write_to_listeners(writeBuffer);
+            free(writeBuffer);
+            writeBuffer = NULL;
+            break;
+
+        case BERTH_STEP:
+            crust_terminal_print_verbose("OPCODE: Berth Step");
+            if(!crust_block_get(operationInput->manualStepInstruction->sourceBlockID, &sourceBlock, state))
+            {
+                crust_terminal_print_verbose("Invalid source block");
+            }
+            if(!crust_block_get(operationInput->manualStepInstruction->destinationBlockID, &targetBlock, state))
+            {
+                crust_terminal_print_verbose("Invalid destination block");
+            }
+            if(!crust_headcode_advance(sourceBlock, targetBlock))
+            {
+                crust_terminal_print_verbose("Failed to step headcode");
+            }
+
+            crust_print_block(sourceBlock, &writeBuffer);
+            crust_write_to_listeners(writeBuffer);
+            free(writeBuffer);
+            writeBuffer = NULL;
+
+            crust_print_block(targetBlock, &writeBuffer);
             crust_write_to_listeners(writeBuffer);
             free(writeBuffer);
             writeBuffer = NULL;

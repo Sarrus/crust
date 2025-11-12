@@ -45,7 +45,8 @@ enum crustOpcode {
     LOOSE_TRACK_CIRCUIT,
     ENABLE_BERTH_UP,
     ENABLE_BERTH_DOWN,
-    INTERPOSE
+    INTERPOSE,
+    BERTH_STEP
 };
 
 struct crustInputBuffer {
@@ -67,12 +68,14 @@ union crustMixedOperationInput
     CRUST_TRACK_CIRCUIT * trackCircuit;
     CRUST_IDENTIFIER identifier;
     CRUST_INTERPOSE_INSTRUCTION * interposeInstruction;
+    CRUST_BERTH_STEP_INSTRUCTION * manualStepInstruction;
 };
 
 int crust_interpret_identifier(char * message, CRUST_IDENTIFIER * identifier);
 int crust_interpret_block(char * message, CRUST_BLOCK * block, CRUST_STATE * state);
 int crust_interpret_track_circuit(char * message, CRUST_TRACK_CIRCUIT * trackCircuit, CRUST_STATE * state);
 int crust_interpret_interpose_instruction(char * message, CRUST_INTERPOSE_INSTRUCTION * interposeInstruction);
+int crust_interpret_berth_step_instruction(char * message, CRUST_BERTH_STEP_INSTRUCTION * berthStepInstruction);
 size_t crust_print_block(CRUST_BLOCK * block, char ** outBuffer);
 size_t crust_print_track_circuit(CRUST_TRACK_CIRCUIT * trackCircuit, char ** outBuffer);
 unsigned long crust_print_state(CRUST_STATE * state, char ** outBuffer);

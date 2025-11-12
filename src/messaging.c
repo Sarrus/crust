@@ -285,6 +285,39 @@ int crust_interpret_interpose_instruction(char * message, CRUST_INTERPOSE_INSTRU
     return 0;
 }
 
+int crust_interpret_berth_step_instruction(char * message, CRUST_BERTH_STEP_INSTRUCTION * berthStepInstruction)
+{
+    errno = 0;
+    char * conversionStopPoint = "";
+    unsigned long long readValue = strtoull(message, &conversionStopPoint, 10);
+    if(!errno // There was no error
+       && conversionStopPoint != message // Some numerals were read
+       && readValue <= UINT32_MAX // The value was less than the maximum
+       && *conversionStopPoint == '/' ) // The end was a '/'
+    {
+        berthStepInstruction->sourceBlockID = readValue;
+    }
+    else
+    {
+        return 1;
+    }
+
+    readValue = strtoull(&conversionStopPoint[1], &conversionStopPoint, 10);
+    if(!errno // There was no error
+       && conversionStopPoint != message // Some numerals were read
+       && readValue <= UINT32_MAX // The value was less than the maximum
+       && *conversionStopPoint == '\0' ) // The end was reached
+    {
+        berthStepInstruction->destinationBlockID = readValue;
+    }
+    else
+    {
+        return 2;
+    }
+
+    return 0;
+}
+
 size_t crust_print_block(CRUST_BLOCK * block, char ** outBuffer)
 {
     CRUST_DYNAMIC_PRINT_BUFFER * dynamicBuffer;
