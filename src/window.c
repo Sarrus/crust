@@ -428,7 +428,7 @@ void crust_window_process_input(char * receivedInputBuffer)
             destBerth = strtoul(&receivedInputBuffer[4], NULL, 10);
             receivedInputBuffer[4] = '\0';
             sourceBerth = strtoul(receivedInputBuffer, NULL, 10);
-            snprintf(writeBuffer, CRUST_MAX_MESSAGE_LENGTH, "MS%li/%li\n", sourceBerth, destBerth);
+            snprintf(writeBuffer, CRUST_MAX_MESSAGE_LENGTH, "BS%li/%li\n", sourceBerth, destBerth);
             crust_connection_write(windowServerConnection, writeBuffer);
             break;
     }
