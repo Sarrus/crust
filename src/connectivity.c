@@ -409,8 +409,8 @@ void crust_connectivity_execute(int timeout)
                             connectivity.connectionList[i]->readBuffer,
                             newConnectivityReadBufferLength);
 
-		    // Make sure the first character of the new memory space is null
-		    connectivity.connectionList[i]->readBuffer[connectivityReadBufferLength] = '\0';
+		            // Make sure the first character of the new memory space is null
+		            connectivity.connectionList[i]->readBuffer[connectivityReadBufferLength] = '\0';
 
                     strncat(connectivity.connectionList[i]->readBuffer, localReadBuffer, bytesRead + 1);
 
