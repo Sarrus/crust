@@ -23,6 +23,7 @@
 #include <stdbool.h>
 #include <sys/types.h>
 #include <netinet/in.h>
+#include <sys/resource.h>
 #include "state.h"
 #ifdef MACOS
 #include <sys/syslimits.h>
@@ -61,6 +62,7 @@ extern in_addr_t crustOptionIPAddress;
 extern bool crustOptionWindowEnterLog;
 extern char crustOptionWindowConfigFilePath[PATH_MAX];
 extern char crustOptionDaemonConfigFilePath[PATH_MAX];
+extern rlim_t crustOptionConnectionLimit;
 
 #ifdef GPIO
 extern char crustOptionGPIOPath[PATH_MAX];

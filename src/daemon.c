@@ -593,10 +593,38 @@ _Noreturn void crust_daemon_loop()
 // Starts the CRUST daemon, exiting when the daemon finishes.
 _Noreturn void crust_daemon_run()
 {
+    char statusText[CRUST_MAX_MESSAGE_LENGTH];
+
     crust_terminal_print_verbose("CRUST daemon starting...");
 #ifdef SYSTEMD
     sd_notify(0, "STATUS=CRUST Daemon starting up...");
 #endif
+    // Set the connection limit
+    struct rlimit connectionRLimit;
+
+    if(crustOptionConnectionLimit)
+    {
+        connectionRLimit.rlim_cur = connectionRLimit.rlim_max = crustOptionConnectionLimit;
+    }
+    else
+    {
+        getrlimit(RLIMIT_NOFILE, &connectionRLimit);
+        snprintf(statusText, CRUST_MAX_MESSAGE_LENGTH - 1, "System defined connection limit: %lu (unprivileged maximum: %lu)",
+                 connectionRLimit.rlim_cur,
+                 connectionRLimit.rlim_max);
+        crustOptionConnectionLimit = connectionRLimit.rlim_max = connectionRLimit.rlim_cur;
+        crust_terminal_print_verbose(statusText);
+    }
+
+    if(setrlimit(RLIMIT_NOFILE, &connectionRLimit) == -1)
+    {
+        crust_terminal_print("Failed to set connection limit.");
+        if(getuid())
+        {
+            crust_terminal_print("Try starting the daemon as root.");
+        }
+        exit(EXIT_FAILURE);
+    }
 
     if(crustOptionSetGroup)
     {

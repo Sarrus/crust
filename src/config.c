@@ -34,6 +34,7 @@ gid_t crustOptionTargetGroup;
 in_port_t crustOptionPort = CRUST_DEFAULT_PORT;
 in_addr_t crustOptionIPAddress = CRUST_DEFAULT_IP_ADDRESS;
 char crustOptionDaemonConfigFilePath[PATH_MAX] = "";
+rlim_t crustOptionConnectionLimit = 0;
 
 #ifdef NCURSES
 bool crustOptionWindowEnterLog = false;

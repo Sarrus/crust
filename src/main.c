@@ -60,7 +60,7 @@ int main(int argc, char ** argv) {
 
     opterr = true;
     int option;
-    while((option = getopt(argc, argv, "a:c:dg:hilm:n:p:r:u:vw:")) != -1)
+    while((option = getopt(argc, argv, "a:c:dg:hilm:n:o:p:r:u:vw:")) != -1)
     {
         switch(option)
         {
@@ -110,6 +110,10 @@ int main(int argc, char ** argv) {
                 crust_terminal_print("  -m  Specify track circuit to GPIO mapping in the format "
                                      "pin_number:circuit_number,[...]");
                 crust_terminal_print("  -n  Run in node mode. Takes the path to a GPIO chip as an argument.");
+                crust_terminal_print("  -o  Attempt to set the connection limit. The default value is specified by the "
+                                     "system. CRUST may need to be started as root to increase the limit. This option "
+                                     "only affects daemon mode. Note that a small number of connections are reserved "
+                                     "for the daemon to use internally.");
                 crust_terminal_print("  -p  Port of the CRUST server (defaults to 12321)");
                 crust_terminal_print("  -r  Specify the run directory used to hold the CRUST socket. ");
                 crust_terminal_print("  -u  Switch to this user after completing setup. "
@@ -143,6 +147,17 @@ int main(int argc, char ** argv) {
                 crust_terminal_print("CRUST only supports node mode when compiled with WITH_GPIO set.");
                 exit(EXIT_FAILURE);
 #endif
+                break;
+
+            case 'o':
+                endPointer = optarg;
+                crustOptionConnectionLimit = strtoul(optarg, &endPointer, 10);
+                if(*optarg == '\0'
+                    || *endPointer != '\0'
+                    || !crustOptionConnectionLimit)
+                {
+                    crust_terminal_print("Invalid connection limit specified");
+                }
                 break;
 
             case 'p':
