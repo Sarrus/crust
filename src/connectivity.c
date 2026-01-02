@@ -31,6 +31,7 @@
 #include "config.h"
 
 CRUST_CONNECTIVITY connectivity = {.pollList = NULL, .connectionListLength = 0, .connectionList = NULL};
+bool connectionLimitReached = false;
 
 void crust_connection_init(CRUST_CONNECTION * connection)
 {
@@ -162,6 +163,36 @@ CRUST_CONNECTION * crust_connection_read_write_open(void (*readFunction)(CRUST_C
 
 CRUST_CONNECTION * crust_connection_socket_accept(CRUST_CONNECTION * socket, int fd)
 {
+    // Attempt to accept the connection
+    int newfd = accept(fd, NULL, 0);
+
+    if(newfd == -1)
+    {
+        if(errno == EAGAIN || errno == EWOULDBLOCK)
+        {
+            // No connection to accept
+            crust_terminal_print_verbose("Tried to accept a non-existent connection.");
+            return NULL;
+        }
+
+        if(errno == EMFILE)
+        {
+            crust_terminal_print_verbose("Cant accept a new connection - CRUST connection limit reached");
+            connectionLimitReached = true;
+            return NULL;
+        }
+
+        if(errno == ENFILE)
+        {
+            crust_terminal_print_verbose("Cant accept a new connection - system connection limit reached");
+            connectionLimitReached = true;
+            return NULL;
+        }
+
+        crust_terminal_print("Unknown error accepting a connection");
+        exit(EXIT_FAILURE);
+    }
+
     // Prepare memory to hold the connection
     crust_connectivity_extend();
     CRUST_CONNECTION * connection = connectivity.connectionList[connectivity.connectionListLength - 1];
@@ -169,8 +200,7 @@ CRUST_CONNECTION * crust_connection_socket_accept(CRUST_CONNECTION * socket, int
     connection->type = CONNECTION_TYPE_READ_WRITE;
     connection->readFunction = socket->readFunction;
     connection->closeFunction = socket->closeFunction;
-
-    pollListEntry->fd = accept(fd, NULL, 0);
+    pollListEntry->fd = newfd;
 
     // Inherit socket functions
     connection->readFunction = socket->readFunction;
@@ -331,6 +361,20 @@ void crust_connectivity_execute(int timeout)
             // Start write polling
             connectivity.pollList[i].events |= POLLWRNORM;
         }
+
+        // Find sockets
+        if(connectivity.connectionList[i]->type == CONNECTION_TYPE_SOCKET)
+        {
+            // Stop looking for new connections if we have reached the connection limit
+            if(connectionLimitReached)
+            {
+                connectivity.pollList->events &= ~POLLRDNORM;
+            }
+            else
+            {
+                connectivity.pollList->events |= POLLRDNORM;
+            }
+        }
     }
 
     poll(connectivity.pollList, connectivity.connectionListLength, timeout);
@@ -348,6 +392,7 @@ void crust_connectivity_execute(int timeout)
             connectivity.pollList[i].revents = 0; // Ignore any other events if we had a hangup
 	    close(connectivity.pollList[i].fd); // Close the file descriptor
 	    connectivity.pollList[i].fd = -(connectivity.pollList[i].fd); // Stop polling
+        connectionLimitReached = false; // Allow new connections if we have stopped
         }
 
         // Handle new outbound connections opening
@@ -370,7 +415,10 @@ void crust_connectivity_execute(int timeout)
             if(connectivity.connectionList[i]->type == CONNECTION_TYPE_SOCKET)
             {
                 CRUST_CONNECTION * newConnection = crust_connection_socket_accept(connectivity.connectionList[i], connectivity.pollList[i].fd);
-                connectivity.connectionList[i]->openFunction(newConnection);
+                if(newConnection != NULL)
+                {
+                    connectivity.connectionList[i]->openFunction(newConnection);
+                }
             }
             else if(connectivity.connectionList[i]->type == CONNECTION_TYPE_KEYBOARD)
             {
