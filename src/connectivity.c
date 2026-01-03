@@ -377,7 +377,18 @@ void crust_connectivity_execute(int timeout)
         }
     }
 
-    poll(connectivity.pollList, connectivity.connectionListLength, timeout);
+    int pollResult = poll(connectivity.pollList, connectivity.connectionListLength, timeout);
+
+    if(!pollResult)
+    {
+        // Poll returned without anything to look at
+        return;
+    }
+    if(pollResult == -1)
+    {
+        crust_terminal_print("Poll error.");
+        exit(EXIT_FAILURE);
+    }
 
     for(int i = 0; i < connectivity.connectionListLength; i++)
     {
